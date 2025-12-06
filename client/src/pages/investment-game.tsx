@@ -186,7 +186,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   
   // Refs for intervals and game loop
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const historyIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize Game
   useEffect(() => {
@@ -204,18 +203,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
       });
     }, 1000);
 
-    // History Recording (for Chart) - Record every second
-    // Using currentPriceRef.current ensures we always get the latest price even inside interval
-    historyIntervalRef.current = setInterval(() => {
-      setPriceHistory(prev => {
-        // Keep updating chart so it scrolls even if price is flat
-        const newTime = prev.length;
-        // Only keep last 60 points to keep chart readable
-        const newHistory = [...prev, { time: newTime, price: currentPriceRef.current }];
-        return newHistory.slice(-60); 
-      });
-    }, 1000);
-
     // News Event Generator - Faster Frequency (3s - 8s)
     const scheduleNextNews = () => {
       // Random time between 3s and 8s for next news
@@ -230,7 +217,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     return () => {
       clearInterval(timerInterval);
       if (newsIntervalRef.current) clearTimeout(newsIntervalRef.current);
-      if (historyIntervalRef.current) clearInterval(historyIntervalRef.current);
     };
   }, []);
 
@@ -270,6 +256,13 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     
     currentPriceRef.current = newPrice;
     setCurrentPrice(newPrice);
+
+    // Update Chart History ONLY when price changes
+    setPriceHistory(prev => {
+      const newHistory = [...prev, { time: prev.length, price: newPrice }];
+      // Limit history length if needed, but since we only add on news, it won't grow super fast (maybe ~30-40 points max in 2 mins)
+      return newHistory; 
+    });
   };
 
   const handleBuy = () => {
@@ -405,12 +398,8 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                   <YAxis 
                     domain={['auto', 'auto']} 
-                    hide={false} 
-                    tick={{fill: '#64748b', fontSize: 12}} 
-                    tickFormatter={(value) => `${(value/10000).toFixed(0)}만`}
-                    width={40}
-                    axisLine={false}
-                    tickLine={false}
+                    hide={true} 
+                    width={0}
                   />
                   <RechartsTooltip 
                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
