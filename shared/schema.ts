@@ -16,3 +16,18 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Ranking Schema
+export interface Ranking {
+  id: string;
+  name: string;
+  returnRate: number;
+  finalValue: number;
+  createdAt: Date;
+}
+
+export interface InsertRanking {
+  name: string;
+  returnRate: number;
+  finalValue: number;
+}

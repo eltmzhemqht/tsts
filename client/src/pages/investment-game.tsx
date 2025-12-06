@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -14,10 +16,16 @@ import {
   AlertCircle,
   Wallet,
   Newspaper,
-  LineChart
+  LineChart,
+  HelpCircle,
+  X,
+  ChevronRight,
+  ChevronLeft,
+  Trophy,
+  Medal
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Area, AreaChart, ResponsiveContainer, YAxis, XAxis, Tooltip as RechartsTooltip, CartesianGrid } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, YAxis, XAxis, CartesianGrid } from "recharts";
 
 // --- Game Constants & Types ---
 
@@ -39,7 +47,7 @@ const ASSETS: AssetConfig[] = [
     icon: Bitcoin, 
     volatility: [0.10, 0.30], 
     color: "text-yellow-500",
-    description: "하이 리스크, 하이 리턴. ±10~30% 변동성."
+    description: "고위험, 고수익.\n±10~30% 변동성."
   },
   { 
     id: "stock", 
@@ -47,7 +55,7 @@ const ASSETS: AssetConfig[] = [
     icon: TrendingUp, 
     volatility: [0.05, 0.15], 
     color: "text-blue-500",
-    description: "균형 잡힌 투자. ±5~15% 변동성."
+    description: "균형 잡힌 투자.\n±5~15% 변동성."
   },
   { 
     id: "real_estate", 
@@ -55,26 +63,58 @@ const ASSETS: AssetConfig[] = [
     icon: Building2, 
     volatility: [0.02, 0.06], 
     color: "text-green-500",
-    description: "안정적인 자산. ±2~6% 변동성."
+    description: "안정적인 자산.\n±2~6% 변동성."
   },
 ];
 
 const GAME_DURATION = 120; // seconds
-const INITIAL_CAPITAL = 10000000; // 10 million KRW
+const INITIAL_CAPITAL = 20000000; // 20 million KRW
 
 // News Events
 const NEWS_EVENTS = [
+  // 호재 (Good News)
   { text: "정부, 해당 자산 규제 완화 발표!", impact: 1.15, type: "good" },
-  { text: "글로벌 경제 위기 우려 확산", impact: 0.85, type: "bad" },
   { text: "대형 기관 투자자 매수세 유입", impact: 1.10, type: "good" },
-  { text: "차익 실현 매물 쏟아짐", impact: 0.90, type: "bad" },
   { text: "기술적 반등 구간 진입", impact: 1.08, type: "good" },
-  { text: "해킹/보안 이슈 발생!", impact: 0.75, type: "bad" },
   { text: "깜짝 실적/업데이트 발표", impact: 1.25, type: "good" },
   { text: "유명 인플루언서의 긍정적 언급", impact: 1.12, type: "good" },
-  { text: "주요국 금리 인상 발표", impact: 0.88, type: "bad" },
   { text: "신규 기술 개발 성공 소식", impact: 1.20, type: "good" },
+  { text: "글로벌 투자은행 매수 추천", impact: 1.18, type: "good" },
+  { text: "대형 M&A 소식, 시장 기대감 상승", impact: 1.22, type: "good" },
+  { text: "주요 국가 승인 및 라이선스 획득", impact: 1.16, type: "good" },
+  { text: "파트너십 체결, 협력 확대 발표", impact: 1.13, type: "good" },
+  { text: "분기 실적 시장 기대치 초과 달성", impact: 1.19, type: "good" },
+  { text: "신제품 출시, 시장 반응 긍정적", impact: 1.14, type: "good" },
+  { text: "대형 펀드의 대규모 투자 유입", impact: 1.21, type: "good" },
+  { text: "정부 지원 정책 발표", impact: 1.17, type: "good" },
+  { text: "전문가들, 상승 전망 제시", impact: 1.11, type: "good" },
+  { text: "유동성 공급 확대 소식", impact: 1.09, type: "good" },
+  { text: "주요 거래소 상장 확정", impact: 1.24, type: "good" },
+  { text: "기관 투자자들의 적극적 매수", impact: 1.15, type: "good" },
+  { text: "글로벌 기업과의 전략적 제휴", impact: 1.20, type: "good" },
+  { text: "시장 리더십 강화 발표", impact: 1.18, type: "good" },
+  
+  // 악재 (Bad News)
+  { text: "글로벌 경제 위기 우려 확산", impact: 0.85, type: "bad" },
+  { text: "차익 실현 매물 쏟아짐", impact: 0.90, type: "bad" },
+  { text: "해킹/보안 이슈 발생!", impact: 0.75, type: "bad" },
+  { text: "주요국 금리 인상 발표", impact: 0.88, type: "bad" },
   { text: "경영진 비리 의혹 제기", impact: 0.80, type: "bad" },
+  { text: "규제 강화 우려 확산", impact: 0.82, type: "bad" },
+  { text: "대형 투자자들의 대량 매도", impact: 0.78, type: "bad" },
+  { text: "경쟁사 신제품 출시, 시장 점유율 위협", impact: 0.86, type: "bad" },
+  { text: "주요 고객사와의 계약 해지 소식", impact: 0.83, type: "bad" },
+  { text: "분기 실적 시장 기대치 하회", impact: 0.79, type: "bad" },
+  { text: "기술적 하락 추세 전환", impact: 0.87, type: "bad" },
+  { text: "전문가들, 하락 전망 제시", impact: 0.84, type: "bad" },
+  { text: "유동성 부족 우려 확산", impact: 0.81, type: "bad" },
+  { text: "주요 거래소 상장 철회 소식", impact: 0.72, type: "bad" },
+  { text: "대규모 손실 발생 보고", impact: 0.76, type: "bad" },
+  { text: "정부 규제 강화 법안 통과", impact: 0.83, type: "bad" },
+  { text: "경쟁사가 더 나은 기술 공개", impact: 0.88, type: "bad" },
+  { text: "주요 파트너와의 관계 악화", impact: 0.85, type: "bad" },
+  { text: "시장 과열 우려, 조정 필요성 제기", impact: 0.89, type: "bad" },
+  { text: "글로벌 경제 침체 우려 확산", impact: 0.77, type: "bad" },
 ];
 
 interface NewsItem {
@@ -127,20 +167,414 @@ const playSound = (type: 'buy' | 'sell') => {
 };
 
 
+// --- Tutorial Types & Data ---
+
+type TutorialStep = {
+  id: number;
+  title: string;
+  description: string;
+  target?: string; // CSS selector for highlighting
+  position?: "top" | "bottom" | "left" | "right" | "center";
+};
+
+const TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    id: 1,
+    title: "게임 목표",
+    description: "2분 동안 초기 자본 2000만원으로 최대한 많은 수익을 올리는 것이 목표입니다!",
+    position: "center"
+  },
+  {
+    id: 2,
+    title: "뉴스 확인",
+    description: "뉴스가 나타나면 호재(초록색)인지 악재(빨간색)인지 확인하세요. 뉴스가 나온 후 1.5초 후에 가격이 변동됩니다.",
+    target: "[data-tutorial='news']",
+    position: "bottom"
+  },
+  {
+    id: 3,
+    title: "가격 차트",
+    description: "실시간 가격 차트를 통해 가격 변동 추이를 확인할 수 있습니다.",
+    target: "[data-tutorial='chart']",
+    position: "left"
+  },
+  {
+    id: 4,
+    title: "매수 버튼",
+    description: "호재 뉴스가 나오면 매수 버튼을 눌러 자산을 구매하세요. 전액 매수로 모든 현금을 사용합니다.",
+    target: "[data-tutorial='buy']",
+    position: "left"
+  },
+  {
+    id: 5,
+    title: "매도 버튼",
+    description: "악재 뉴스가 나오거나 수익을 실현하고 싶을 때 매도 버튼을 눌러 모든 자산을 판매하세요.",
+    target: "[data-tutorial='sell']",
+    position: "left"
+  },
+  {
+    id: 6,
+    title: "포트폴리오",
+    description: "보유 현금, 보유 수량, 평가 금액을 확인하세요. 총 자산 가치는 현금 + 평가 금액입니다.",
+    target: "[data-tutorial='portfolio']",
+    position: "right"
+  },
+  {
+    id: 7,
+    title: "시작하기",
+    description: "이제 게임을 시작하세요! 뉴스를 빠르게 읽고 타이밍을 잡아 최고의 수익률을 달성하세요!",
+    position: "center"
+  }
+];
+
+// --- Tutorial Component ---
+
+const TutorialOverlay = ({ 
+  currentStep, 
+  onNext, 
+  onPrev, 
+  onSkip, 
+  onComplete 
+}: { 
+  currentStep: number;
+  onNext: () => void;
+  onPrev: () => void;
+  onSkip: () => void;
+  onComplete: () => void;
+}) => {
+  const step = TUTORIAL_STEPS[currentStep - 1];
+  const isFirst = currentStep === 1;
+  const isLast = currentStep === TUTORIAL_STEPS.length;
+  const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
+  
+  // Calculate card position to avoid highlighted element
+  const getCardPosition = () => {
+    if (!highlightRect) {
+      // No highlight, use default position
+      return {
+        top: 'auto',
+        bottom: 'auto',
+        left: 'auto',
+        right: 'auto',
+        transform: 'none',
+      };
+    }
+    
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const cardWidth = 448; // max-w-md ≈ 448px
+    const cardHeight = 300; // approximate card height
+    const padding = 20;
+    
+    const highlightCenterX = highlightRect.left + highlightRect.width / 2;
+    const highlightCenterY = highlightRect.top + highlightRect.height / 2;
+    
+    // Check available space in each direction
+    const spaceTop = highlightRect.top;
+    const spaceBottom = viewportHeight - (highlightRect.top + highlightRect.height);
+    const spaceLeft = highlightRect.left;
+    const spaceRight = viewportWidth - (highlightRect.left + highlightRect.width);
+    
+    // Find the best position (most space available)
+    const positions = [
+      { dir: 'top', space: spaceTop },
+      { dir: 'bottom', space: spaceBottom },
+      { dir: 'left', space: spaceLeft },
+      { dir: 'right', space: spaceRight },
+    ];
+    
+    positions.sort((a, b) => b.space - a.space);
+    const bestPosition = positions[0];
+    
+    let style: React.CSSProperties = {};
+    
+    if (bestPosition.dir === 'top' && spaceTop >= cardHeight + padding) {
+      // Position above highlight
+      style = {
+        bottom: `${viewportHeight - highlightRect.top + padding}px`,
+        left: '50%',
+        transform: 'translateX(-50%)',
+      };
+    } else if (bestPosition.dir === 'bottom' && spaceBottom >= cardHeight + padding) {
+      // Position below highlight
+      style = {
+        top: `${highlightRect.top + highlightRect.height + padding}px`,
+        left: '50%',
+        transform: 'translateX(-50%)',
+      };
+    } else if (bestPosition.dir === 'left' && spaceLeft >= cardWidth + padding) {
+      // Position to the left
+      style = {
+        top: '50%',
+        right: `${viewportWidth - highlightRect.left + padding}px`,
+        transform: 'translateY(-50%)',
+      };
+    } else if (bestPosition.dir === 'right' && spaceRight >= cardWidth + padding) {
+      // Position to the right
+      style = {
+        top: '50%',
+        left: `${highlightRect.left + highlightRect.width + padding}px`,
+        transform: 'translateY(-50%)',
+      };
+    } else {
+      // Not enough space, position at corner
+      if (highlightCenterX < viewportWidth / 2) {
+        // Highlight is on left, put card on right
+        style = {
+          top: '50%',
+          right: padding,
+          transform: 'translateY(-50%)',
+        };
+      } else {
+        // Highlight is on right, put card on left
+        style = {
+          top: '50%',
+          left: padding,
+          transform: 'translateY(-50%)',
+        };
+      }
+    }
+    
+    return style;
+  };
+
+  useEffect(() => {
+    // Highlight target element
+    if (step.target) {
+      const element = document.querySelector(step.target) as HTMLElement;
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Increase brightness of the element itself
+        const originalStyle = element.style.cssText;
+        element.style.cssText += `
+          filter: brightness(1.5) contrast(1.1);
+          transition: filter 0.3s ease;
+        `;
+        // Wait for scroll to complete
+        setTimeout(() => {
+          const rect = element.getBoundingClientRect();
+          setHighlightRect(rect);
+        }, 300);
+        
+        // Cleanup function
+        return () => {
+          element.style.cssText = originalStyle;
+        };
+      } else {
+        setHighlightRect(null);
+      }
+    } else {
+      setHighlightRect(null);
+    }
+  }, [currentStep, step.target]);
+
+  return (
+    <div className="fixed inset-0 z-50 pointer-events-none">
+      {/* 화면 어둡게 하는 오버레이 */}
+      <div 
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.65)',
+          pointerEvents: 'none',
+        }}
+      />
+      
+      {/* 밝게 강조되는 하이라이트 */}
+      {step.target && highlightRect && (
+        <div 
+          style={{
+            position: 'fixed',
+            left: `${highlightRect.left - 8}px`,
+            top: `${highlightRect.top - 8}px`,
+            width: `${highlightRect.width + 16}px`,
+            height: `${highlightRect.height + 16}px`,
+            background: 'transparent',
+            border: '2px solid #4AB3FF',
+            borderRadius: '12px',
+            boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.65), 0 0 15px rgba(74, 179, 255, 0.9)',
+            backdropFilter: 'brightness(2.2)',
+            WebkitBackdropFilter: 'brightness(2.2)',
+            pointerEvents: 'none',
+            transition: 'all 0.3s ease',
+          }}
+        />
+      )}
+
+      {/* Tutorial Card */}
+      <div className={`absolute inset-0 pointer-events-none ${currentStep === 1 || isLast ? 'flex items-center justify-center' : ''}`}>
+        <motion.div
+          key={currentStep}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ 
+            duration: 0.3,
+            ease: [0.4, 0, 0.2, 1]
+          }}
+          className="pointer-events-auto bg-slate-900 border-2 border-blue-500 rounded-xl shadow-2xl p-5 max-w-sm transition-all duration-400 ease-in-out"
+          style={{
+            ...(currentStep === 1 || isLast ? {
+              // First and last step: always center using flexbox parent
+              position: 'relative',
+            } : {
+              position: 'absolute',
+              ...(step.target && highlightRect ? getCardPosition() : {
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+              }),
+              transition: 'top 0.4s cubic-bezier(0.4, 0, 0.2, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), right 0.4s cubic-bezier(0.4, 0, 0.2, 1), bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+            }),
+          }}
+        >
+          <div className="mb-4">
+            <h3 className="text-xl font-bold text-white mb-1">{step.title}</h3>
+            <p className="text-sm text-slate-400">
+              {currentStep} / {TUTORIAL_STEPS.length}
+            </p>
+          </div>
+          
+          <p className="text-slate-300 mb-6 leading-relaxed">{step.description}</p>
+
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              onClick={onPrev}
+              disabled={isFirst}
+              className="flex-1"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" />
+              이전
+            </Button>
+            
+            {isLast ? (
+              <Button
+                onClick={onComplete}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                시작하기
+              </Button>
+            ) : (
+              <Button
+                onClick={onNext}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+              >
+                다음
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
 // --- Components ---
 
-const GameHome = ({ onStart }: { onStart: (asset: AssetType) => void }) => {
+// Ranking Display Component (reusable)
+const RankingsDisplay = memo(({ rankings, getRankIcon }: { rankings: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>, getRankIcon: (rank: number) => React.ReactNode }) => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-8 animate-in fade-in zoom-in duration-500">
-      <div className="text-center space-y-2">
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tighter bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-          2분 투자 챌린지
-        </h1>
-        <p className="text-slate-400 text-lg max-w-md mx-auto">
-          2분 동안 최고의 수익률을 올려보세요.<br/>
-          뉴스를 읽고, 타이밍을 잡아 대박을 노리세요!
-        </p>
-      </div>
+    <div className="space-y-2 mt-4">
+      {rankings.length === 0 ? (
+        <p className="text-center text-slate-400 py-8">아직 등록된 랭킹이 없습니다.</p>
+      ) : (
+        rankings.map((ranking, index) => {
+          const rank = index + 1;
+          const isPositive = ranking.returnRate >= 0;
+          return (
+            <div
+              key={ranking.id}
+              className={`flex items-center gap-3 p-3 rounded-lg ${
+                rank <= 3 ? 'bg-slate-800/80 border border-slate-700' : 'bg-slate-800/50'
+              }`}
+            >
+              <div className="flex items-center justify-center w-8">
+                {getRankIcon(rank)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-white truncate">{ranking.name}</p>
+                <p className="text-xs text-slate-400">
+                  {new Date(ranking.createdAt).toLocaleString('ko-KR')}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className={`font-mono font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                  {ranking.returnRate > 0 ? '+' : ''}{ranking.returnRate.toFixed(2)}%
+                </p>
+                <p className="text-xs text-slate-400">{formatMoney(ranking.finalValue)}</p>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+});
+
+const GameHome = ({ onStart, onTutorial }: { onStart: (asset: AssetType) => void, onTutorial: () => void }) => {
+  const [showRankings, setShowRankings] = useState(false);
+  const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
+
+  const fetchRankings = useCallback(async () => {
+    try {
+      const response = await fetch("/api/rankings?limit=20");
+      if (response.ok) {
+        const data = await response.json();
+        setRankings(data);
+      } else {
+        const errorText = await response.text();
+        console.error("Failed to fetch rankings:", response.status, errorText);
+      }
+    } catch (error) {
+      console.error("Failed to fetch rankings:", error);
+    }
+  }, []);
+
+  const getRankIcon = useCallback((rank: number) => {
+    if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
+    if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
+    if (rank === 3) return <Medal className="w-5 h-5 text-amber-600" />;
+    return <span className="text-slate-400 font-bold w-5 text-center">{rank}</span>;
+  }, []);
+
+  useEffect(() => {
+    fetchRankings();
+  }, [fetchRankings]);
+
+  return (
+    <>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tighter bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+            2분 투자 챌린지
+          </h1>
+          <p className="text-slate-400 text-lg max-w-md mx-auto">
+            2분 동안 최고의 수익률을 올려보세요.<br/>
+            뉴스를 읽고, 타이밍을 잡아 대박을 노리세요!
+          </p>
+          <div className="flex gap-2 justify-center mt-4">
+            <Button 
+              onClick={onTutorial}
+              variant="outline"
+              className="bg-slate-800/50 hover:bg-slate-700 border-slate-700"
+            >
+              <HelpCircle className="w-4 h-4 mr-2" />
+              튜토리얼 보기
+            </Button>
+            <Button 
+              onClick={() => {
+                fetchRankings();
+                setShowRankings(true);
+              }}
+              variant="outline"
+              className="bg-slate-800/50 hover:bg-slate-700 border-slate-700"
+            >
+              <Trophy className="w-4 h-4 mr-2" />
+              랭킹 보기
+            </Button>
+          </div>
+        </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
         {ASSETS.map((asset) => (
@@ -156,7 +590,7 @@ const GameHome = ({ onStart }: { onStart: (asset: AssetType) => void }) => {
               <CardTitle className="text-xl">{asset.name}</CardTitle>
             </CardHeader>
             <CardContent className="text-center">
-              <p className="text-sm text-slate-400">{asset.description}</p>
+              <p className="text-sm text-slate-400 whitespace-pre-line">{asset.description}</p>
               <Button className="mt-6 w-full bg-slate-800 hover:bg-blue-600" variant="outline">
                 선택하기
               </Button>
@@ -164,12 +598,30 @@ const GameHome = ({ onStart }: { onStart: (asset: AssetType) => void }) => {
           </Card>
         ))}
       </div>
-    </div>
+      </div>
+
+      {/* Rankings Dialog */}
+      <Dialog open={showRankings} onOpenChange={setShowRankings}>
+        <DialogContent className="bg-slate-900 border-slate-800 max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Trophy className="w-6 h-6 text-yellow-500" />
+              랭킹
+            </DialogTitle>
+          </DialogHeader>
+          <RankingsDisplay rankings={rankings} getRankIcon={getRankIcon} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
-const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCapital: number) => void }) => {
+const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { assetType: AssetType, onEnd: (finalCapital: number) => void, showTutorial?: boolean, onTutorialEnd?: () => void }) => {
   const assetConfig = ASSETS.find(a => a.id === assetType)!;
+  
+  // Tutorial State
+  const [tutorialStep, setTutorialStep] = useState(showTutorial ? 1 : 0);
+  const [isTutorialActive, setIsTutorialActive] = useState(showTutorial);
   
   // Game State
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
@@ -181,11 +633,47 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   const [currentPrice, setCurrentPrice] = useState(currentPriceRef.current);
   
   const [priceHistory, setPriceHistory] = useState<{time: number, price: number}[]>([]);
-  const [cooldown, setCooldown] = useState(0);
   const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
   
   // Refs for intervals and game loop
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeLeftRef = useRef(timeLeft);
+
+  // Keep timeLeftRef in sync with timeLeft
+  useEffect(() => {
+    timeLeftRef.current = timeLeft;
+  }, [timeLeft]);
+
+  const triggerNews = useCallback(() => {
+    const news = NEWS_EVENTS[Math.floor(Math.random() * NEWS_EVENTS.length)];
+    const newItem: NewsItem = {
+      id: Date.now(),
+      time: GAME_DURATION - timeLeftRef.current,
+      text: news.text,
+      type: news.type,
+      impact: news.impact
+    };
+
+    // Show news first - keep only last 10 news items
+    setNewsHistory(prev => [newItem, ...prev.slice(0, 9)]);
+    
+    // Apply price impact after a short delay (1.5 seconds) to give player time to react
+    setTimeout(() => {
+      // Update both Ref (for intervals) and State (for UI)
+      const prevPrice = currentPriceRef.current;
+      const newPrice = Math.floor(prevPrice * news.impact);
+      
+      currentPriceRef.current = newPrice;
+      setCurrentPrice(newPrice);
+
+      // Update Chart History ONLY when price changes
+      setPriceHistory(prev => {
+        const newHistory = [...prev, { time: prev.length, price: newPrice }];
+        // Limit history to last 50 points for performance
+        return newHistory.slice(-50); 
+      });
+    }, 1500); // 1.5 second delay for player to read and react
+  }, []);
 
   // Initialize Game
   useEffect(() => {
@@ -195,6 +683,11 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     // Start Timer
     const timerInterval = setInterval(() => {
       setTimeLeft((prev) => {
+        // If tutorial is active, keep time at 2 minutes (120 seconds)
+        if (isTutorialActive) {
+          return GAME_DURATION; // Keep at 2 minutes during tutorial
+        }
+        // Normal game: countdown normally
         if (prev <= 1) {
           clearInterval(timerInterval);
           return 0;
@@ -208,17 +701,25 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
       // Random time between 3s and 8s for next news
       const nextNewsTime = Math.random() * (8000 - 3000) + 3000;
       newsIntervalRef.current = setTimeout(() => {
-        triggerNews();
-        if (timeLeft > 5) scheduleNextNews(); // Only schedule if time remains
+        const currentTime = timeLeftRef.current;
+        if (currentTime > 5) {
+          triggerNews();
+          scheduleNextNews(); // Only schedule if time remains
+        }
       }, nextNewsTime);
     };
+    // Trigger first news immediately when game starts
+    triggerNews();
     scheduleNextNews();
 
     return () => {
       clearInterval(timerInterval);
-      if (newsIntervalRef.current) clearTimeout(newsIntervalRef.current);
+      if (newsIntervalRef.current) {
+        clearTimeout(newsIntervalRef.current);
+        newsIntervalRef.current = null;
+      }
     };
-  }, []);
+  }, [isTutorialActive, triggerNews]);
 
   // End Game Effect
   useEffect(() => {
@@ -226,47 +727,9 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
       const finalValue = cash + (holdings * currentPriceRef.current);
       onEnd(finalValue);
     }
-  }, [timeLeft]);
+  }, [timeLeft, cash, holdings, onEnd]);
 
-  // Cooldown Timer
-  useEffect(() => {
-    if (cooldown > 0) {
-      const timer = setTimeout(() => setCooldown(prev => prev - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [cooldown]);
-
-
-  const triggerNews = () => {
-    const news = NEWS_EVENTS[Math.floor(Math.random() * NEWS_EVENTS.length)];
-    const newItem: NewsItem = {
-      id: Date.now(),
-      time: GAME_DURATION - timeLeft,
-      text: news.text,
-      type: news.type,
-      impact: news.impact
-    };
-
-    setNewsHistory(prev => [newItem, ...prev]); // Add to top
-    
-    // Apply immediate price impact
-    // Update both Ref (for intervals) and State (for UI)
-    const prevPrice = currentPriceRef.current;
-    const newPrice = Math.floor(prevPrice * news.impact);
-    
-    currentPriceRef.current = newPrice;
-    setCurrentPrice(newPrice);
-
-    // Update Chart History ONLY when price changes
-    setPriceHistory(prev => {
-      const newHistory = [...prev, { time: prev.length, price: newPrice }];
-      // Limit history length if needed, but since we only add on news, it won't grow super fast (maybe ~30-40 points max in 2 mins)
-      return newHistory; 
-    });
-  };
-
-  const handleBuy = () => {
-    if (cooldown > 0) return;
+  const handleBuy = useCallback(() => {
     if (cash < currentPrice) return; 
     
     playSound('buy');
@@ -277,11 +740,9 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
 
     setHoldings(prev => prev + quantity);
     setCash(prev => prev - (quantity * currentPrice));
-    setCooldown(3); // 3 seconds cooldown
-  };
+  }, [cash, currentPrice]);
 
-  const handleSell = () => {
-    if (cooldown > 0) return;
+  const handleSell = useCallback(() => {
     if (holdings === 0) return;
     
     playSound('sell');
@@ -290,11 +751,24 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     const revenue = holdings * currentPrice;
     setCash(prev => prev + revenue);
     setHoldings(0);
-    setCooldown(3);
-  };
+  }, [holdings, currentPrice]);
 
-  const totalValue = cash + (holdings * currentPrice);
-  const returnRate = ((totalValue - INITIAL_CAPITAL) / INITIAL_CAPITAL) * 100;
+  const totalValue = useMemo(() => cash + (holdings * currentPrice), [cash, holdings, currentPrice]);
+  const returnRate = useMemo(() => ((totalValue - INITIAL_CAPITAL) / INITIAL_CAPITAL) * 100, [totalValue]);
+
+  // Developer shortcut: Ctrl+Shift+E to end game
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "E") {
+        e.preventDefault();
+        const finalValue = cash + (holdings * currentPrice);
+        onEnd(finalValue);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [cash, holdings, currentPrice, onEnd]);
 
   return (
     <div className="max-w-6xl mx-auto p-4 h-screen flex flex-col gap-4">
@@ -345,7 +819,7 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
         <div className="md:col-span-2 flex flex-col gap-4 min-h-0">
           
           {/* News Ticker (Small) */}
-          <Card className="bg-slate-900/80 border-slate-800 shrink-0 h-[80px] overflow-hidden relative">
+          <Card data-tutorial="news" className="bg-slate-900/80 border-slate-800 shrink-0 h-[80px] overflow-hidden relative">
             <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />
             <CardContent className="p-0 h-full flex items-center">
                {newsHistory.length === 0 ? (
@@ -380,7 +854,7 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
           </Card>
 
           {/* Chart Area (Fills remaining space) */}
-          <Card className="bg-slate-900/80 border-slate-800 flex-1 flex flex-col min-h-0">
+          <Card data-tutorial="chart" className="bg-slate-900/80 border-slate-800 flex-1 flex flex-col min-h-0">
             <CardHeader className="pb-2 border-b border-slate-800">
               <CardTitle className="text-sm font-medium text-slate-400 flex items-center gap-2">
                 <LineChart className="w-4 h-4" /> 실시간 시세 차트
@@ -401,12 +875,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
                     hide={true} 
                     width={0}
                   />
-                  <RechartsTooltip 
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
-                    itemStyle={{ color: '#f8fafc' }}
-                    formatter={(value: number) => [formatMoney(value), "Price"]}
-                    labelFormatter={() => ''}
-                  />
                   {/* Changed back to 'monotone' or 'linear' for a more standard chart look, 
                       'stepAfter' was creating confusion. 'linear' is best for accurate point-to-point representation. */}
                   <Area 
@@ -426,7 +894,7 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
 
         {/* Controls & Portfolio */}
         <div className="flex flex-col gap-4">
-          <Card className="bg-slate-900/80 border-slate-800 flex-1">
+          <Card data-tutorial="portfolio" className="bg-slate-900/80 border-slate-800 flex-1">
              <CardHeader className="pb-2 border-b border-slate-800">
               <CardTitle className="text-sm font-medium text-slate-400">포트폴리오</CardTitle>
             </CardHeader>
@@ -447,25 +915,100 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
           </Card>
 
           <div className="grid grid-cols-1 gap-3">
+            {/* Original Button Design (commented for easy rollback):
             <Button 
               size="lg" 
               onClick={handleBuy} 
-              disabled={cooldown > 0 || cash < currentPrice}
+              disabled={cash < currentPrice}
               className="h-16 text-lg font-bold bg-red-600 hover:bg-red-700 text-white transition-all active:scale-95 shadow-lg shadow-red-900/20"
             >
-              {cooldown > 0 ? `대기 ${cooldown}s` : "전액 매수 (BUY)"}
+              전액 매수 (BUY)
             </Button>
             <Button 
               size="lg" 
               onClick={handleSell} 
-              disabled={cooldown > 0 || holdings === 0}
+              disabled={holdings === 0}
               className="h-16 text-lg font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all active:scale-95 shadow-lg shadow-blue-900/20"
             >
-              {cooldown > 0 ? `대기 ${cooldown}s` : "전액 매도 (SELL)"}
+              전액 매도 (SELL)
+            </Button>
+            */}
+            
+            {/* Enhanced Button Design */}
+            <Button 
+              data-tutorial="buy"
+              size="lg" 
+              onClick={handleBuy} 
+              disabled={cash < currentPrice}
+              className="h-16 text-lg font-bold text-white transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
+              style={{
+                background: cash < currentPrice 
+                  ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                  : 'linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%)',
+                boxShadow: cash < currentPrice
+                  ? '0 4px 14px 0 rgba(0, 0, 0, 0.2)'
+                  : '0 8px 24px 0 rgba(239, 68, 68, 0.4), 0 4px 8px 0 rgba(239, 68, 68, 0.2)',
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              <div className="relative flex items-center justify-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                <span>전액 매수 (BUY)</span>
+              </div>
+            </Button>
+            <Button 
+              data-tutorial="sell"
+              size="lg" 
+              onClick={handleSell} 
+              disabled={holdings === 0}
+              className="h-16 text-lg font-bold text-white transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
+              style={{
+                background: holdings === 0
+                  ? 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
+                  : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%)',
+                boxShadow: holdings === 0
+                  ? '0 4px 14px 0 rgba(0, 0, 0, 0.2)'
+                  : '0 8px 24px 0 rgba(59, 130, 246, 0.4), 0 4px 8px 0 rgba(59, 130, 246, 0.2)',
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+              <div className="relative flex items-center justify-center gap-2">
+                <TrendingDown className="w-5 h-5" />
+                <span>전액 매도 (SELL)</span>
+              </div>
             </Button>
           </div>
         </div>
       </div>
+      
+      {/* Tutorial Overlay */}
+      {isTutorialActive && tutorialStep > 0 && (
+        <TutorialOverlay
+          currentStep={tutorialStep}
+          onNext={() => {
+            if (tutorialStep < TUTORIAL_STEPS.length) {
+              setTutorialStep(prev => prev + 1);
+            }
+          }}
+          onPrev={() => {
+            if (tutorialStep > 1) {
+              setTutorialStep(prev => prev - 1);
+            }
+          }}
+          onSkip={() => {
+            setIsTutorialActive(false);
+            setTutorialStep(0);
+          }}
+          onComplete={() => {
+            setIsTutorialActive(false);
+            setTutorialStep(0);
+            // Return to game start screen when tutorial ends
+            if (onTutorialEnd) {
+              onTutorialEnd();
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -474,6 +1017,12 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
   const profit = finalValue - INITIAL_CAPITAL;
   const returnRate = (profit / INITIAL_CAPITAL) * 100;
   const isProfit = profit >= 0;
+  
+  const [playerName, setPlayerName] = useState("");
+  const [isRankingSubmitted, setIsRankingSubmitted] = useState(false);
+  const [showRankings, setShowRankings] = useState(false);
+  const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   let message = "";
   if (returnRate > 50) message = "투자천재의 탄생! 워렌 버핏이 형님이라 부르겠네요.";
@@ -482,40 +1031,162 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
   else if (returnRate > -20) message = "수업료 냈다고 생각하세요... 다음엔 더 잘할 수 있습니다.";
   else message = "한강 물 온도 체크하러 가야할지도...? 😭";
 
+  const submitRanking = async () => {
+    if (!playerName.trim() || playerName.trim().length > 10) return;
+    
+    setIsSubmitting(true);
+    try {
+      const response = await fetch("/api/rankings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: playerName.trim(),
+          returnRate,
+          finalValue,
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Ranking submitted successfully:", data);
+        setIsRankingSubmitted(true);
+        await fetchRankings(); // Refresh rankings
+      } else {
+        let errorMessage = "알 수 없는 오류";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch {
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        }
+        console.error("Failed to submit ranking:", response.status, errorMessage);
+        alert(`랭킹 등록 실패: ${errorMessage}`);
+      }
+    } catch (error) {
+      console.error("Failed to submit ranking:", error);
+      alert("랭킹 등록 중 오류가 발생했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const fetchRankings = useCallback(async () => {
+    try {
+      const response = await fetch("/api/rankings?limit=20");
+      if (response.ok) {
+        const data = await response.json();
+        setRankings(data);
+      } else {
+        const errorText = await response.text();
+        console.error("Failed to fetch rankings:", response.status, errorText);
+      }
+    } catch (error) {
+      console.error("Failed to fetch rankings:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRankings();
+  }, [fetchRankings]);
+
+  const getRankIcon = (rank: number) => {
+    if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
+    if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
+    if (rank === 3) return <Medal className="w-5 h-5 text-amber-600" />;
+    return <span className="text-slate-400 font-bold w-5 text-center">{rank}</span>;
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 animate-in zoom-in duration-500">
-      <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl">
-        <CardHeader className="text-center space-y-4 pt-10">
-          <div className={`mx-auto p-6 rounded-full ${isProfit ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-            {isProfit ? <TrendingUp className="w-16 h-16" /> : <TrendingDown className="w-16 h-16" />}
-          </div>
-          <CardTitle className="text-3xl font-bold">투자 종료!</CardTitle>
-          <CardDescription className="text-lg">{message}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6 pb-10">
-          <div className="space-y-2 bg-slate-800/50 p-6 rounded-xl border border-slate-800">
-            <div className="flex justify-between text-slate-400">
-              <span>초기 자본</span>
-              <span>{formatMoney(INITIAL_CAPITAL)}</span>
+    <>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 animate-in zoom-in duration-500">
+        <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl">
+          <CardHeader className="text-center space-y-4 pt-10">
+            <div className={`mx-auto p-6 rounded-full ${isProfit ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+              {isProfit ? <TrendingUp className="w-16 h-16" /> : <TrendingDown className="w-16 h-16" />}
             </div>
-            <div className="flex justify-between font-bold text-xl">
-              <span>최종 자산</span>
-              <span className={isProfit ? 'text-green-400' : 'text-red-400'}>{formatMoney(finalValue)}</span>
+            <CardTitle className="text-3xl font-bold">투자 종료!</CardTitle>
+            <CardDescription className="text-lg">{message}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6 pb-10">
+            <div className="space-y-2 bg-slate-800/50 p-6 rounded-xl border border-slate-800">
+              <div className="flex justify-between text-slate-400">
+                <span>초기 자본</span>
+                <span>{formatMoney(INITIAL_CAPITAL)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-xl">
+                <span>최종 자산</span>
+                <span className={isProfit ? 'text-green-400' : 'text-red-400'}>{formatMoney(finalValue)}</span>
+              </div>
+              <div className="border-t border-slate-700 my-2 pt-2 flex justify-between items-center">
+                <span className="text-slate-400">수익률</span>
+                <span className={`text-2xl font-mono font-bold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
+                  {returnRate > 0 ? '+' : ''}{returnRate.toFixed(2)}%
+                </span>
+              </div>
             </div>
-            <div className="border-t border-slate-700 my-2 pt-2 flex justify-between items-center">
-              <span className="text-slate-400">수익률</span>
-              <span className={`text-2xl font-mono font-bold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
-                {returnRate > 0 ? '+' : ''}{returnRate.toFixed(2)}%
-              </span>
+
+            {/* Ranking Section */}
+            {!isRankingSubmitted ? (
+              <div className="space-y-3 bg-slate-800/50 p-4 rounded-xl border border-slate-800">
+                <label className="text-sm font-medium text-slate-300">랭킹에 등록하기</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="학번 이름"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value.slice(0, 10))}
+                    maxLength={10}
+                    className="flex-1 bg-slate-900 border-slate-700"
+                  />
+                  <Button
+                    onClick={submitRanking}
+                    disabled={!playerName.trim() || isSubmitting}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isSubmitting ? "등록 중..." : "등록"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-green-500/20 border border-green-500/50 p-4 rounded-xl text-center">
+                <p className="text-green-400 font-medium">랭킹에 등록되었습니다! </p>
+              </div>
+            )}
+            
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  fetchRankings();
+                  setShowRankings(true);
+                }}
+                variant="outline"
+                className="flex-1 border-slate-700 hover:bg-slate-800"
+              >
+                <Trophy className="mr-2 w-4 h-4" />
+                랭킹 보기
+              </Button>
+              <Button onClick={onRestart} className="flex-1 h-12 text-lg font-bold" variant="default">
+                <RotateCcw className="mr-2 w-5 h-5" /> 다시 도전하기
+              </Button>
             </div>
-          </div>
-          
-          <Button onClick={onRestart} className="w-full h-12 text-lg font-bold" variant="default">
-            <RotateCcw className="mr-2 w-5 h-5" /> 다시 도전하기
-          </Button>
-        </CardContent>
-      </Card>
-    </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Rankings Dialog */}
+      <Dialog open={showRankings} onOpenChange={setShowRankings}>
+        <DialogContent className="bg-slate-900 border-slate-800 max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Trophy className="w-6 h-6 text-yellow-500" />
+              랭킹
+            </DialogTitle>
+          </DialogHeader>
+          <RankingsDisplay rankings={rankings} getRankIcon={getRankIcon} />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
@@ -523,10 +1194,24 @@ export default function InvestmentGame() {
   const [status, setStatus] = useState<"idle" | "playing" | "ended">("idle");
   const [selectedAsset, setSelectedAsset] = useState<AssetType | null>(null);
   const [finalResult, setFinalResult] = useState(0);
+  const [showTutorial, setShowTutorial] = useState(false);
 
   const startGame = (asset: AssetType) => {
     setSelectedAsset(asset);
     setStatus("playing");
+  };
+
+  const startTutorial = () => {
+    // Start with a default asset for tutorial
+    setSelectedAsset("stock");
+    setShowTutorial(true);
+    setStatus("playing");
+  };
+
+  const endTutorial = () => {
+    setShowTutorial(false);
+    setSelectedAsset(null);
+    setStatus("idle");
   };
 
   const endGame = (finalVal: number) => {
@@ -540,6 +1225,33 @@ export default function InvestmentGame() {
     setFinalResult(0);
   };
 
+  const clearRankings = async () => {
+    try {
+      const response = await fetch("/api/rankings", {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        alert("랭킹이 초기화되었습니다.");
+      }
+    } catch (error) {
+      console.error("Failed to clear rankings:", error);
+    }
+  };
+
+  // Developer shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Shift+R: Clear rankings
+      if (e.ctrlKey && e.shiftKey && e.key === "R") {
+        e.preventDefault();
+        clearRankings();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-blue-500/30 selection:text-blue-200">
       <AnimatePresence mode="wait">
@@ -550,7 +1262,7 @@ export default function InvestmentGame() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <GameHome onStart={startGame} />
+            <GameHome onStart={startGame} onTutorial={startTutorial} />
           </motion.div>
         )}
         {status === "playing" && selectedAsset && (
@@ -561,7 +1273,12 @@ export default function InvestmentGame() {
             exit={{ opacity: 0, scale: 1.05 }}
             className="h-full"
           >
-            <GamePlay assetType={selectedAsset} onEnd={endGame} />
+            <GamePlay 
+              assetType={selectedAsset} 
+              onEnd={endGame} 
+              showTutorial={showTutorial} 
+              onTutorialEnd={endTutorial}
+            />
            </motion.div>
         )}
         {status === "ended" && (
