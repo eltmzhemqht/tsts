@@ -14,8 +14,6 @@ import {
   AlertCircle,
   Wallet,
   Newspaper,
-  ArrowUpRight,
-  ArrowDownRight,
   LineChart
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -63,7 +61,6 @@ const ASSETS: AssetConfig[] = [
 
 const GAME_DURATION = 120; // seconds
 const INITIAL_CAPITAL = 10000000; // 10 million KRW
-const TRADE_COOLDOWN = 3000; // 3 seconds
 
 // News Events
 const NEWS_EVENTS = [
@@ -74,6 +71,10 @@ const NEWS_EVENTS = [
   { text: "기술적 반등 구간 진입", impact: 1.08, type: "good" },
   { text: "해킹/보안 이슈 발생!", impact: 0.75, type: "bad" },
   { text: "깜짝 실적/업데이트 발표", impact: 1.25, type: "good" },
+  { text: "유명 인플루언서의 긍정적 언급", impact: 1.12, type: "good" },
+  { text: "주요국 금리 인상 발표", impact: 0.88, type: "bad" },
+  { text: "신규 기술 개발 성공 소식", impact: 1.20, type: "good" },
+  { text: "경영진 비리 의혹 제기", impact: 0.80, type: "bad" },
 ];
 
 interface NewsItem {
@@ -91,6 +92,40 @@ const formatMoney = (amount: number) => {
 };
 
 const getRandomPrice = () => Math.floor(Math.random() * (9000000 - 5000000 + 1)) + 5000000;
+
+// --- Sound Effects (Web Audio API) ---
+const playSound = (type: 'buy' | 'sell') => {
+  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioContext) return;
+  
+  const ctx = new AudioContext();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  
+  if (type === 'buy') {
+    // "Cha-ching" like ascending major third
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+    osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.1); // E5
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } else {
+    // "Sell" mechanical/descending sound
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.2);
+  }
+};
+
 
 // --- Components ---
 
@@ -176,13 +211,13 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
       });
     }, 1000);
 
-    // News Event Generator
+    // News Event Generator - Faster Frequency (3s - 8s)
     const scheduleNextNews = () => {
-      // Random time between 15s and 25s for next news
-      const nextNewsTime = Math.random() * (25000 - 15000) + 15000;
+      // Random time between 3s and 8s for next news
+      const nextNewsTime = Math.random() * (8000 - 3000) + 3000;
       newsIntervalRef.current = setTimeout(() => {
         triggerNews();
-        if (timeLeft > 20) scheduleNextNews(); // Only schedule if time remains
+        if (timeLeft > 5) scheduleNextNews(); // Only schedule if time remains
       }, nextNewsTime);
     };
     scheduleNextNews();
@@ -227,7 +262,10 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     setCurrentPrice(prev => {
       const newPrice = Math.floor(prev * news.impact);
       // Force update history immediately so the jump is captured instantly in chart
-      setPriceHistory(h => [...h, { time: h.length, price: newPrice }].slice(-60));
+      // We modify the LAST history point to reflect the jump immediately, or just let the interval pick it up?
+      // Letting the interval pick it up creates a "step" look which is nice.
+      // But updating immediately feels more responsive.
+      // Let's just update the state, the interval runs every 1s which is fast enough.
       return newPrice;
     });
   };
@@ -236,6 +274,8 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     if (cooldown > 0) return;
     if (cash < currentPrice) return; 
     
+    playSound('buy');
+
     // Buy Max
     const quantity = Math.floor(cash / currentPrice);
     if (quantity === 0) return;
@@ -248,6 +288,8 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   const handleSell = () => {
     if (cooldown > 0) return;
     if (holdings === 0) return;
+    
+    playSound('sell');
 
     // Sell All
     const revenue = holdings * currentPrice;
@@ -374,8 +416,10 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
                     formatter={(value: number) => [formatMoney(value), "Price"]}
                     labelFormatter={() => ''}
                   />
+                  {/* Changed back to 'monotone' or 'linear' for a more standard chart look, 
+                      'stepAfter' was creating confusion. 'linear' is best for accurate point-to-point representation. */}
                   <Area 
-                    type="stepAfter" 
+                    type="linear" 
                     dataKey="price" 
                     stroke={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} 
                     strokeWidth={2}
