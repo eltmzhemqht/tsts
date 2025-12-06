@@ -15,10 +15,11 @@ import {
   Wallet,
   Newspaper,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  LineChart
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Area, AreaChart, ResponsiveContainer, YAxis, XAxis, Tooltip as RechartsTooltip, CartesianGrid } from "recharts";
 
 // --- Game Constants & Types ---
 
@@ -140,14 +141,19 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   const [cash, setCash] = useState(INITIAL_CAPITAL);
   const [holdings, setHoldings] = useState(0); // Quantity of asset
   const [currentPrice, setCurrentPrice] = useState(getRandomPrice());
+  const [priceHistory, setPriceHistory] = useState<{time: number, price: number}[]>([]);
   const [cooldown, setCooldown] = useState(0);
   const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
   
   // Refs for intervals and game loop
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const historyIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize Game
   useEffect(() => {
+    // Initial history point
+    setPriceHistory([{ time: 0, price: currentPrice }]);
+
     // Start Timer
     const timerInterval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -156,6 +162,17 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
           return 0;
         }
         return prev - 1;
+      });
+    }, 1000);
+
+    // History Recording (for Chart) - Record every second
+    historyIntervalRef.current = setInterval(() => {
+      setPriceHistory(prev => {
+        // Keep updating chart so it scrolls even if price is flat
+        const newTime = prev.length;
+        // Only keep last 60 points to keep chart readable
+        const newHistory = [...prev, { time: newTime, price: currentPrice }];
+        return newHistory.slice(-60); 
       });
     }, 1000);
 
@@ -173,6 +190,7 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     return () => {
       clearInterval(timerInterval);
       if (newsIntervalRef.current) clearTimeout(newsIntervalRef.current);
+      if (historyIntervalRef.current) clearInterval(historyIntervalRef.current);
     };
   }, []);
 
@@ -206,12 +224,16 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     setNewsHistory(prev => [newItem, ...prev]); // Add to top
     
     // Apply immediate price impact
-    setCurrentPrice(prev => Math.floor(prev * news.impact));
+    setCurrentPrice(prev => {
+      const newPrice = Math.floor(prev * news.impact);
+      // Force update history immediately so the jump is captured instantly in chart
+      setPriceHistory(h => [...h, { time: h.length, price: newPrice }].slice(-60));
+      return newPrice;
+    });
   };
 
   const handleBuy = () => {
     if (cooldown > 0) return;
-    // Allow buying even if slightly short, or just strict check? Strict check.
     if (cash < currentPrice) return; 
     
     // Buy Max
@@ -282,64 +304,90 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
       {/* Main Content Area */}
       <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-4">
         
-        {/* News Ticker Area */}
-        <Card className="md:col-span-2 bg-slate-900/80 border-slate-800 flex flex-col">
-          <CardHeader className="pb-2 border-b border-slate-800 bg-slate-950/50">
-            <CardTitle className="text-sm font-medium text-slate-400 flex items-center gap-2">
-              <Newspaper className="w-4 h-4" /> 실시간 뉴스 티커
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 p-0 overflow-hidden relative">
-            {/* Gradient overlay for fade effect at bottom */}
-            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none z-10" />
-            
-            {newsHistory.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2 p-8">
-                <div className="animate-pulse flex flex-col items-center">
-                  <AlertCircle className="w-8 h-8 opacity-50 mb-2" />
-                  <p>시장 모니터링 중...</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col">
-                {newsHistory.map((news, index) => (
-                  <motion.div
-                    key={news.id}
-                    initial={{ opacity: 0, x: -20, height: 0 }}
-                    animate={{ opacity: 1, x: 0, height: 'auto' }}
-                    className={`
-                      border-b border-slate-800/50 p-4 flex items-center gap-4
-                      ${index === 0 ? 'bg-slate-800/40' : 'opacity-60'}
-                    `}
+        {/* Left Column: News Ticker + Chart */}
+        <div className="md:col-span-2 flex flex-col gap-4 min-h-0">
+          
+          {/* News Ticker (Small) */}
+          <Card className="bg-slate-900/80 border-slate-800 shrink-0 h-[80px] overflow-hidden relative">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500" />
+            <CardContent className="p-0 h-full flex items-center">
+               {newsHistory.length === 0 ? (
+                  <div className="w-full flex items-center justify-center text-slate-500 gap-2 animate-pulse">
+                    <AlertCircle className="w-5 h-5" />
+                    <span>시장 뉴스를 기다리는 중...</span>
+                  </div>
+               ) : (
+                  <motion.div 
+                    key={newsHistory[0].id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full px-6 flex items-center justify-between gap-4"
                   >
-                    <div className={`
-                      shrink-0 w-2 h-2 rounded-full 
-                      ${index === 0 ? 'animate-pulse' : ''}
-                      ${news.type === 'good' ? 'bg-green-500' : 'bg-red-500'}
-                    `} />
-                    
-                    <span className="font-mono text-xs text-slate-500 w-16 shrink-0">
-                      {Math.floor((GAME_DURATION - news.time) / 60)}:{String((GAME_DURATION - news.time) % 60).padStart(2, '0')}
-                    </span>
-
-                    <span className={`flex-1 font-medium ${index === 0 ? 'text-white text-lg' : 'text-slate-400'}`}>
-                      {news.text}
-                    </span>
-
-                    <span className={`
-                      shrink-0 font-bold text-sm px-2 py-1 rounded
-                      ${news.type === 'good' 
-                        ? 'bg-green-500/10 text-green-500' 
-                        : 'bg-red-500/10 text-red-500'}
-                    `}>
-                      {news.type === 'good' ? '호재' : '악재'}
+                    <div className="flex items-center gap-4 overflow-hidden">
+                      <span className={`
+                        shrink-0 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider
+                        ${newsHistory[0].type === 'good' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
+                      `}>
+                        {newsHistory[0].type === 'good' ? '호재' : '악재'}
+                      </span>
+                      <span className="text-lg md:text-xl font-bold text-white truncate">
+                        {newsHistory[0].text}
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono text-slate-500 shrink-0 whitespace-nowrap">
+                       방금 전
                     </span>
                   </motion.div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+               )}
+            </CardContent>
+          </Card>
+
+          {/* Chart Area (Fills remaining space) */}
+          <Card className="bg-slate-900/80 border-slate-800 flex-1 flex flex-col min-h-0">
+            <CardHeader className="pb-2 border-b border-slate-800">
+              <CardTitle className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                <LineChart className="w-4 h-4" /> 실시간 시세 차트
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 p-4 min-h-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={priceHistory}>
+                  <defs>
+                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <YAxis 
+                    domain={['auto', 'auto']} 
+                    hide={false} 
+                    tick={{fill: '#64748b', fontSize: 12}} 
+                    tickFormatter={(value) => `${(value/10000).toFixed(0)}만`}
+                    width={40}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <RechartsTooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
+                    itemStyle={{ color: '#f8fafc' }}
+                    formatter={(value: number) => [formatMoney(value), "Price"]}
+                    labelFormatter={() => ''}
+                  />
+                  <Area 
+                    type="stepAfter" 
+                    dataKey="price" 
+                    stroke={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} 
+                    strokeWidth={2}
+                    fillOpacity={1} 
+                    fill="url(#colorPrice)" 
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Controls & Portfolio */}
         <div className="flex flex-col gap-4">
