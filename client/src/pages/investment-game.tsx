@@ -175,7 +175,11 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [cash, setCash] = useState(INITIAL_CAPITAL);
   const [holdings, setHoldings] = useState(0); // Quantity of asset
-  const [currentPrice, setCurrentPrice] = useState(getRandomPrice());
+  
+  // Use refs for mutable state in intervals to avoid stale closures
+  const currentPriceRef = useRef(getRandomPrice());
+  const [currentPrice, setCurrentPrice] = useState(currentPriceRef.current);
+  
   const [priceHistory, setPriceHistory] = useState<{time: number, price: number}[]>([]);
   const [cooldown, setCooldown] = useState(0);
   const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
@@ -187,7 +191,7 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   // Initialize Game
   useEffect(() => {
     // Initial history point
-    setPriceHistory([{ time: 0, price: currentPrice }]);
+    setPriceHistory([{ time: 0, price: currentPriceRef.current }]);
 
     // Start Timer
     const timerInterval = setInterval(() => {
@@ -201,12 +205,13 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     }, 1000);
 
     // History Recording (for Chart) - Record every second
+    // Using currentPriceRef.current ensures we always get the latest price even inside interval
     historyIntervalRef.current = setInterval(() => {
       setPriceHistory(prev => {
         // Keep updating chart so it scrolls even if price is flat
         const newTime = prev.length;
         // Only keep last 60 points to keep chart readable
-        const newHistory = [...prev, { time: newTime, price: currentPrice }];
+        const newHistory = [...prev, { time: newTime, price: currentPriceRef.current }];
         return newHistory.slice(-60); 
       });
     }, 1000);
@@ -232,7 +237,7 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   // End Game Effect
   useEffect(() => {
     if (timeLeft === 0) {
-      const finalValue = cash + (holdings * currentPrice);
+      const finalValue = cash + (holdings * currentPriceRef.current);
       onEnd(finalValue);
     }
   }, [timeLeft]);
@@ -259,15 +264,12 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     setNewsHistory(prev => [newItem, ...prev]); // Add to top
     
     // Apply immediate price impact
-    setCurrentPrice(prev => {
-      const newPrice = Math.floor(prev * news.impact);
-      // Force update history immediately so the jump is captured instantly in chart
-      // We modify the LAST history point to reflect the jump immediately, or just let the interval pick it up?
-      // Letting the interval pick it up creates a "step" look which is nice.
-      // But updating immediately feels more responsive.
-      // Let's just update the state, the interval runs every 1s which is fast enough.
-      return newPrice;
-    });
+    // Update both Ref (for intervals) and State (for UI)
+    const prevPrice = currentPriceRef.current;
+    const newPrice = Math.floor(prevPrice * news.impact);
+    
+    currentPriceRef.current = newPrice;
+    setCurrentPrice(newPrice);
   };
 
   const handleBuy = () => {
