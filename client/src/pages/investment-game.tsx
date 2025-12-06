@@ -2,11 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "@/hooks/use-toast";
 import { 
   TrendingUp, 
   TrendingDown, 
-  DollarSign, 
   Clock, 
   Briefcase, 
   Building2, 
@@ -146,7 +144,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
   
   // Refs for intervals and game loop
-  const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize Game
@@ -176,7 +173,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     return () => {
       clearInterval(timerInterval);
       if (newsIntervalRef.current) clearTimeout(newsIntervalRef.current);
-      if (gameLoopRef.current) clearInterval(gameLoopRef.current);
     };
   }, []);
 
@@ -187,30 +183,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
       onEnd(finalValue);
     }
   }, [timeLeft]);
-
-  // Price Volatility Loop
-  useEffect(() => {
-    gameLoopRef.current = setInterval(() => {
-      setCurrentPrice((prevPrice) => {
-        // Random walk based on volatility
-        const volatilityRange = assetConfig.volatility;
-        // Reduce volatility per tick to make it manageable (the config is for "large" swings, we want micro movements)
-        // We'll take a small fraction of the volatility for per-second movement
-        const changePercent = (Math.random() * (volatilityRange[1] - volatilityRange[0]) + volatilityRange[0]) / 10; 
-        const direction = Math.random() > 0.48 ? 1 : -1; // Slightly bullish bias for fun? No, let's keep it random.
-        
-        // Occasional "Momentum" based on recent history could be added here, but random walk is fine for prototype.
-        const change = prevPrice * (changePercent / 100) * direction;
-        const newPrice = Math.max(1000, prevPrice + change); // Minimum price 1000
-
-        return Math.floor(newPrice);
-      });
-    }, 1000); // Update price every second
-
-    return () => {
-      if (gameLoopRef.current) clearInterval(gameLoopRef.current);
-    }
-  }, [assetConfig]);
 
   // Cooldown Timer
   useEffect(() => {
@@ -225,7 +197,7 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     const news = NEWS_EVENTS[Math.floor(Math.random() * NEWS_EVENTS.length)];
     const newItem: NewsItem = {
       id: Date.now(),
-      time: GAME_DURATION - timeLeft, // Approximate time elapsed when triggering, but let's stick to showing current timeLeft instead maybe? Or elapsed.
+      time: GAME_DURATION - timeLeft,
       text: news.text,
       type: news.type,
       impact: news.impact
@@ -233,23 +205,14 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
 
     setNewsHistory(prev => [newItem, ...prev]); // Add to top
     
-    toast({
-      title: "시장 속보!",
-      description: news.text,
-      variant: news.impact > 1 ? "default" : "destructive", // Greenish for good, Red for bad
-      duration: 4000,
-    });
-
     // Apply immediate price impact
     setCurrentPrice(prev => Math.floor(prev * news.impact));
   };
 
   const handleBuy = () => {
     if (cooldown > 0) return;
-    if (cash < currentPrice) {
-      toast({ title: "잔액 부족", description: "현금이 부족합니다.", variant: "destructive" });
-      return;
-    }
+    // Allow buying even if slightly short, or just strict check? Strict check.
+    if (cash < currentPrice) return; 
     
     // Buy Max
     const quantity = Math.floor(cash / currentPrice);
@@ -258,24 +221,17 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     setHoldings(prev => prev + quantity);
     setCash(prev => prev - (quantity * currentPrice));
     setCooldown(3); // 3 seconds cooldown
-    
-    toast({ title: "매수 체결", description: `${quantity}주를 매수했습니다.`, className: "bg-green-900 border-green-800 text-green-100" });
   };
 
   const handleSell = () => {
     if (cooldown > 0) return;
-    if (holdings === 0) {
-      toast({ title: "보유 자산 없음", description: "매도할 자산이 없습니다.", variant: "destructive" });
-      return;
-    }
+    if (holdings === 0) return;
 
     // Sell All
     const revenue = holdings * currentPrice;
     setCash(prev => prev + revenue);
     setHoldings(0);
     setCooldown(3);
-
-    toast({ title: "매도 체결", description: `전량 매도하여 ${formatMoney(revenue)}을 확보했습니다.`, className: "bg-red-900 border-red-800 text-red-100" });
   };
 
   const totalValue = cash + (holdings * currentPrice);
@@ -325,55 +281,62 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
 
       {/* Main Content Area */}
       <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* News Table Area (Replaced Chart) */}
-        <Card className="md:col-span-2 bg-slate-900/80 border-slate-800 flex flex-col min-h-[300px]">
-          <CardHeader className="pb-2 border-b border-slate-800">
+        
+        {/* News Ticker Area */}
+        <Card className="md:col-span-2 bg-slate-900/80 border-slate-800 flex flex-col">
+          <CardHeader className="pb-2 border-b border-slate-800 bg-slate-950/50">
             <CardTitle className="text-sm font-medium text-slate-400 flex items-center gap-2">
-              <Newspaper className="w-4 h-4" /> 실시간 뉴스 피드
+              <Newspaper className="w-4 h-4" /> 실시간 뉴스 티커
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 p-0 min-h-0 overflow-auto">
+          <CardContent className="flex-1 p-0 overflow-hidden relative">
+            {/* Gradient overlay for fade effect at bottom */}
+            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none z-10" />
+            
             {newsHistory.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
-                <AlertCircle className="w-8 h-8 opacity-50" />
-                <p>아직 뉴스가 없습니다. 곧 소식이 도착할 것입니다...</p>
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2 p-8">
+                <div className="animate-pulse flex flex-col items-center">
+                  <AlertCircle className="w-8 h-8 opacity-50 mb-2" />
+                  <p>시장 모니터링 중...</p>
+                </div>
               </div>
             ) : (
-              <Table>
-                <TableHeader className="bg-slate-950/50 sticky top-0 z-10">
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="w-[100px] text-slate-400">시간</TableHead>
-                    <TableHead className="text-slate-400">뉴스 내용</TableHead>
-                    <TableHead className="text-right text-slate-400">영향</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {newsHistory.map((news) => (
-                    <TableRow key={news.id} className="border-slate-800 hover:bg-slate-800/50 animate-in fade-in slide-in-from-top-2 duration-300">
-                      <TableCell className="font-mono text-slate-500">
-                        {Math.floor((GAME_DURATION - (GAME_DURATION - timeLeft)) / 60)}:
-                        {String((GAME_DURATION - timeLeft) % 60).padStart(2, '0')} 전
-                        {/* Actually let's just show "Now" style timestamp relative to game start might be confusing. Let's show "Time Left" style or "Occurred At" */}
-                        {/* Let's switch to: Occurred at X seconds left */}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {news.text}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {news.type === 'good' ? (
-                          <span className="flex items-center justify-end gap-1 text-green-500 font-bold">
-                            <ArrowUpRight className="w-4 h-4" /> 호재
-                          </span>
-                        ) : (
-                          <span className="flex items-center justify-end gap-1 text-red-500 font-bold">
-                            <ArrowDownRight className="w-4 h-4" /> 악재
-                          </span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="flex flex-col">
+                {newsHistory.map((news, index) => (
+                  <motion.div
+                    key={news.id}
+                    initial={{ opacity: 0, x: -20, height: 0 }}
+                    animate={{ opacity: 1, x: 0, height: 'auto' }}
+                    className={`
+                      border-b border-slate-800/50 p-4 flex items-center gap-4
+                      ${index === 0 ? 'bg-slate-800/40' : 'opacity-60'}
+                    `}
+                  >
+                    <div className={`
+                      shrink-0 w-2 h-2 rounded-full 
+                      ${index === 0 ? 'animate-pulse' : ''}
+                      ${news.type === 'good' ? 'bg-green-500' : 'bg-red-500'}
+                    `} />
+                    
+                    <span className="font-mono text-xs text-slate-500 w-16 shrink-0">
+                      {Math.floor((GAME_DURATION - news.time) / 60)}:{String((GAME_DURATION - news.time) % 60).padStart(2, '0')}
+                    </span>
+
+                    <span className={`flex-1 font-medium ${index === 0 ? 'text-white text-lg' : 'text-slate-400'}`}>
+                      {news.text}
+                    </span>
+
+                    <span className={`
+                      shrink-0 font-bold text-sm px-2 py-1 rounded
+                      ${news.type === 'good' 
+                        ? 'bg-green-500/10 text-green-500' 
+                        : 'bg-red-500/10 text-red-500'}
+                    `}>
+                      {news.type === 'good' ? '호재' : '악재'}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
