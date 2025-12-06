@@ -15,10 +15,12 @@ import {
   RotateCcw,
   AlertCircle,
   Wallet,
-  LineChart
+  Newspaper,
+  ArrowUpRight,
+  ArrowDownRight
 } from "lucide-react";
-import { Area, AreaChart, ResponsiveContainer, YAxis, Tooltip as RechartsTooltip } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 // --- Game Constants & Types ---
 
@@ -66,14 +68,22 @@ const TRADE_COOLDOWN = 3000; // 3 seconds
 
 // News Events
 const NEWS_EVENTS = [
-  { text: "📢 정부, 해당 자산 규제 완화 발표! (호재)", impact: 1.15 },
-  { text: "📢 글로벌 경제 위기 우려 확산 (악재)", impact: 0.85 },
-  { text: "📢 대형 기관 투자자 매수세 유입 (호재)", impact: 1.10 },
-  { text: "📢 차익 실현 매물 쏟아짐 (악재)", impact: 0.90 },
-  { text: "📢 기술적 반등 구간 진입 (호재)", impact: 1.08 },
-  { text: "📢 해킹/보안 이슈 발생! (대형 악재)", impact: 0.75 },
-  { text: "📢 깜짝 실적/업데이트 발표 (대형 호재)", impact: 1.25 },
+  { text: "정부, 해당 자산 규제 완화 발표!", impact: 1.15, type: "good" },
+  { text: "글로벌 경제 위기 우려 확산", impact: 0.85, type: "bad" },
+  { text: "대형 기관 투자자 매수세 유입", impact: 1.10, type: "good" },
+  { text: "차익 실현 매물 쏟아짐", impact: 0.90, type: "bad" },
+  { text: "기술적 반등 구간 진입", impact: 1.08, type: "good" },
+  { text: "해킹/보안 이슈 발생!", impact: 0.75, type: "bad" },
+  { text: "깜짝 실적/업데이트 발표", impact: 1.25, type: "good" },
 ];
+
+interface NewsItem {
+  id: number;
+  time: number;
+  text: string;
+  type: string;
+  impact: number;
+}
 
 // --- Helper Functions ---
 
@@ -132,19 +142,15 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
   const [cash, setCash] = useState(INITIAL_CAPITAL);
   const [holdings, setHoldings] = useState(0); // Quantity of asset
   const [currentPrice, setCurrentPrice] = useState(getRandomPrice());
-  const [priceHistory, setPriceHistory] = useState<{time: number, price: number}[]>([]);
   const [cooldown, setCooldown] = useState(0);
+  const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
   
   // Refs for intervals and game loop
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const startTimeRef = useRef(Date.now());
 
   // Initialize Game
   useEffect(() => {
-    // Initial history point
-    setPriceHistory([{ time: 0, price: currentPrice }]);
-
     // Start Timer
     const timerInterval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -206,15 +212,6 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
     }
   }, [assetConfig]);
 
-  // Update History when price changes
-  useEffect(() => {
-    setPriceHistory(prev => {
-      const newHistory = [...prev, { time: GAME_DURATION - timeLeft, price: currentPrice }];
-      if (newHistory.length > 30) return newHistory.slice(newHistory.length - 30); // Keep last 30 ticks for chart
-      return newHistory;
-    });
-  }, [currentPrice, timeLeft]);
-
   // Cooldown Timer
   useEffect(() => {
     if (cooldown > 0) {
@@ -226,6 +223,15 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
 
   const triggerNews = () => {
     const news = NEWS_EVENTS[Math.floor(Math.random() * NEWS_EVENTS.length)];
+    const newItem: NewsItem = {
+      id: Date.now(),
+      time: GAME_DURATION - timeLeft, // Approximate time elapsed when triggering, but let's stick to showing current timeLeft instead maybe? Or elapsed.
+      text: news.text,
+      type: news.type,
+      impact: news.impact
+    };
+
+    setNewsHistory(prev => [newItem, ...prev]); // Add to top
     
     toast({
       title: "시장 속보!",
@@ -317,41 +323,58 @@ const GamePlay = ({ assetType, onEnd }: { assetType: AssetType, onEnd: (finalCap
         </Card>
       </div>
 
-      {/* Main Chart Area */}
+      {/* Main Content Area */}
       <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* News Table Area (Replaced Chart) */}
         <Card className="md:col-span-2 bg-slate-900/80 border-slate-800 flex flex-col min-h-[300px]">
           <CardHeader className="pb-2 border-b border-slate-800">
             <CardTitle className="text-sm font-medium text-slate-400 flex items-center gap-2">
-              <LineChart className="w-4 h-4" /> 실시간 시세 차트
+              <Newspaper className="w-4 h-4" /> 실시간 뉴스 피드
             </CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 pt-4 min-h-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={priceHistory}>
-                <defs>
-                  <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <YAxis domain={['auto', 'auto']} hide />
-                <RechartsTooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc' }}
-                  itemStyle={{ color: '#f8fafc' }}
-                  formatter={(value: number) => [formatMoney(value), "Price"]}
-                  labelFormatter={() => ''}
-                />
-                <Area 
-                  type="monotone" 
-                  dataKey="price" 
-                  stroke={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} 
-                  strokeWidth={2}
-                  fillOpacity={1} 
-                  fill="url(#colorPrice)" 
-                  isAnimationActive={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <CardContent className="flex-1 p-0 min-h-0 overflow-auto">
+            {newsHistory.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
+                <AlertCircle className="w-8 h-8 opacity-50" />
+                <p>아직 뉴스가 없습니다. 곧 소식이 도착할 것입니다...</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader className="bg-slate-950/50 sticky top-0 z-10">
+                  <TableRow className="border-slate-800 hover:bg-transparent">
+                    <TableHead className="w-[100px] text-slate-400">시간</TableHead>
+                    <TableHead className="text-slate-400">뉴스 내용</TableHead>
+                    <TableHead className="text-right text-slate-400">영향</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {newsHistory.map((news) => (
+                    <TableRow key={news.id} className="border-slate-800 hover:bg-slate-800/50 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <TableCell className="font-mono text-slate-500">
+                        {Math.floor((GAME_DURATION - (GAME_DURATION - timeLeft)) / 60)}:
+                        {String((GAME_DURATION - timeLeft) % 60).padStart(2, '0')} 전
+                        {/* Actually let's just show "Now" style timestamp relative to game start might be confusing. Let's show "Time Left" style or "Occurred At" */}
+                        {/* Let's switch to: Occurred at X seconds left */}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {news.text}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {news.type === 'good' ? (
+                          <span className="flex items-center justify-end gap-1 text-green-500 font-bold">
+                            <ArrowUpRight className="w-4 h-4" /> 호재
+                          </span>
+                        ) : (
+                          <span className="flex items-center justify-end gap-1 text-red-500 font-bold">
+                            <ArrowDownRight className="w-4 h-4" /> 악재
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
 
