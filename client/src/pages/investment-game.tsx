@@ -177,6 +177,37 @@ type TutorialStep = {
   position?: "top" | "bottom" | "left" | "right" | "center";
 };
 
+// Asset Selection Tutorial Steps
+const ASSET_SELECTION_TUTORIAL_STEPS: TutorialStep[] = [
+  {
+    id: 1,
+    title: "자산 선택",
+    description: "게임을 시작하기 전에 투자할 자산을 선택하세요. 각 자산은 다른 위험도와 수익률을 가지고 있습니다.",
+    position: "center"
+  },
+  {
+    id: 2,
+    title: "암호화폐",
+    description: "암호화폐는 고위험 고수익 자산입니다. ±10~30% 변동성으로 큰 수익을 올릴 수 있지만 손실 위험도 높습니다.",
+    target: "[data-tutorial='asset-coin']",
+    position: "bottom"
+  },
+  {
+    id: 3,
+    title: "주식",
+    description: "주식은 균형 잡힌 투자입니다. ±5~15% 변동성으로 안정적이면서도 수익을 기대할 수 있습니다.",
+    target: "[data-tutorial='asset-stock']",
+    position: "bottom"
+  },
+  {
+    id: 4,
+    title: "부동산",
+    description: "부동산은 안정적인 자산입니다. ±2~6% 변동성으로 가장 안전하지만 수익률은 낮을 수 있습니다.",
+    target: "[data-tutorial='asset-real_estate']",
+    position: "bottom"
+  }
+];
+
 const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 1,
@@ -231,20 +262,26 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 
 const TutorialOverlay = ({ 
   currentStep, 
+  tutorialSteps,
   onNext, 
   onPrev, 
   onSkip, 
-  onComplete 
+  onComplete,
+  hideLastButton = false,
+  isAssetSelectionTutorial = false
 }: { 
   currentStep: number;
+  tutorialSteps: TutorialStep[];
   onNext: () => void;
   onPrev: () => void;
   onSkip: () => void;
   onComplete: () => void;
+  hideLastButton?: boolean;
+  isAssetSelectionTutorial?: boolean;
 }) => {
-  const step = TUTORIAL_STEPS[currentStep - 1];
+  const step = tutorialSteps[currentStep - 1];
   const isFirst = currentStep === 1;
-  const isLast = currentStep === TUTORIAL_STEPS.length;
+  const isLast = currentStep === tutorialSteps.length;
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
   
   // Calculate card position to avoid highlighted element
@@ -343,21 +380,29 @@ const TutorialOverlay = ({
     if (step.target) {
       const element = document.querySelector(step.target) as HTMLElement;
       if (element) {
-        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Get initial rect immediately to avoid jumping
+        const initialRect = element.getBoundingClientRect();
+        setHighlightRect(initialRect);
+        
         // Increase brightness of the element itself
         const originalStyle = element.style.cssText;
         element.style.cssText += `
           filter: brightness(1.5) contrast(1.1);
           transition: filter 0.3s ease;
         `;
-        // Wait for scroll to complete
-        setTimeout(() => {
+        
+        // Scroll into view
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Update rect after scroll completes
+        const scrollTimeout = setTimeout(() => {
           const rect = element.getBoundingClientRect();
           setHighlightRect(rect);
-        }, 300);
+        }, 400);
         
         // Cleanup function
         return () => {
+          clearTimeout(scrollTimeout);
           element.style.cssText = originalStyle;
         };
       } else {
@@ -402,19 +447,30 @@ const TutorialOverlay = ({
       )}
 
       {/* Tutorial Card */}
-      <div className={`absolute inset-0 pointer-events-none ${currentStep === 1 || isLast ? 'flex items-center justify-center' : ''}`}>
+      <div className={`absolute inset-0 pointer-events-none ${currentStep === 1 || step.position === "center" ? 'flex items-center justify-center' : ''}`}>
         <motion.div
-          key={currentStep}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ 
-            duration: 0.3,
-            ease: [0.4, 0, 0.2, 1]
+          layout
+          initial={false}
+          animate={{ 
+            opacity: 1, 
+            scale: 1,
           }}
-          className="pointer-events-auto bg-slate-900 border-2 border-blue-500 rounded-xl shadow-2xl p-5 max-w-sm transition-all duration-400 ease-in-out"
+          transition={{ 
+            layout: {
+              duration: 0.5,
+              ease: [0.4, 0, 0.2, 1]
+            },
+            opacity: {
+              duration: 0.3
+            },
+            scale: {
+              duration: 0.3
+            }
+          }}
+          className="pointer-events-auto bg-slate-900 border-2 border-blue-500 rounded-xl shadow-2xl p-5 max-w-sm"
           style={{
-            ...(currentStep === 1 || isLast ? {
-              // First and last step: always center using flexbox parent
+            ...(currentStep === 1 || step.position === "center" ? {
+              // First step or center position: always center using flexbox parent
               position: 'relative',
             } : {
               position: 'absolute',
@@ -423,47 +479,67 @@ const TutorialOverlay = ({
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
               }),
-              transition: 'top 0.4s cubic-bezier(0.4, 0, 0.2, 1), left 0.4s cubic-bezier(0.4, 0, 0.2, 1), right 0.4s cubic-bezier(0.4, 0, 0.2, 1), bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
             }),
           }}
         >
-          <div className="mb-4">
-            <h3 className="text-xl font-bold text-white mb-1">{step.title}</h3>
-            <p className="text-sm text-slate-400">
-              {currentStep} / {TUTORIAL_STEPS.length}
-            </p>
-          </div>
-          
-          <p className="text-slate-300 mb-6 leading-relaxed">{step.description}</p>
-
-          <div className="flex items-center justify-between gap-2">
-            <Button
-              variant="outline"
-              onClick={onPrev}
-              disabled={isFirst}
-              className="flex-1"
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              이전
-            </Button>
+          <motion.div
+            key={currentStep}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <div className="mb-4">
+              <h3 className="text-xl font-bold text-white mb-1">{step.title}</h3>
+              <p className="text-sm text-slate-400">
+                {currentStep} / {tutorialSteps.length}
+              </p>
+            </div>
             
-            {isLast ? (
+            <p className="text-slate-300 mb-6 leading-relaxed">{step.description}</p>
+
+            <div className="flex items-center justify-between gap-2">
               <Button
-                onClick={onComplete}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                variant="outline"
+                onClick={onPrev}
+                disabled={isFirst}
+                className="flex-1"
               >
-                시작하기
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                이전
               </Button>
-            ) : (
-              <Button
-                onClick={onNext}
-                className="flex-1 bg-blue-600 hover:bg-blue-700"
-              >
-                다음
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            )}
-          </div>
+              
+              {isLast ? (
+                hideLastButton ? (
+                  <div className="flex-1 text-center text-slate-400 text-sm">
+                    자산을 선택하세요
+                  </div>
+                ) : isAssetSelectionTutorial ? (
+                  <Button
+                    onClick={onNext}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  >
+                    다음
+                    <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={onComplete}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  >
+                    시작하기
+                  </Button>
+                )
+              ) : (
+                <Button
+                  onClick={onNext}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  다음
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              )}
+            </div>
+          </motion.div>
         </motion.div>
       </div>
     </div>
@@ -471,6 +547,107 @@ const TutorialOverlay = ({
 };
 
 // --- Components ---
+
+// Asset Selection Component with Tutorial
+const AssetSelection = ({ 
+  onSelect, 
+  showTutorial = false, 
+  onTutorialEnd 
+}: { 
+  onSelect: (asset: AssetType) => void;
+  showTutorial?: boolean;
+  onTutorialEnd?: () => void;
+}) => {
+  const [tutorialStep, setTutorialStep] = useState(showTutorial ? 1 : 0);
+  const [isTutorialActive, setIsTutorialActive] = useState(showTutorial);
+  const [selectedAsset, setSelectedAsset] = useState<AssetType | null>(null);
+
+  const handleAssetSelect = (asset: AssetType) => {
+    setSelectedAsset(asset);
+    // Always allow selection, tutorial or not
+    if (isTutorialActive) {
+      // Tutorial complete, proceed to game
+      setIsTutorialActive(false);
+      setTutorialStep(0);
+    }
+    onSelect(asset);
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-8 relative">
+      <div className="text-center space-y-2">
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tighter bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
+          2분 투자 챌린지
+        </h1>
+        <p className="text-slate-400 text-lg max-w-md mx-auto">
+          투자할 자산을 선택하세요
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
+        {ASSETS.map((asset) => (
+          <Card 
+            key={asset.id} 
+            data-tutorial={`asset-${asset.id}`}
+            className={`group hover:border-blue-500/50 transition-all duration-300 hover:-translate-y-1 cursor-pointer bg-slate-900/50 backdrop-blur border-slate-800 ${
+              selectedAsset === asset.id ? 'border-blue-500' : ''
+            }`}
+            onClick={() => handleAssetSelect(asset.id)}
+          >
+            <CardHeader className="text-center pb-2">
+              <div className="mx-auto bg-slate-800 p-4 rounded-full mb-4 group-hover:bg-slate-700 transition-colors">
+                <asset.icon className={`w-10 h-10 ${asset.color}`} />
+              </div>
+              <CardTitle className="text-xl">{asset.name}</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center">
+              <p className="text-sm text-slate-400 whitespace-pre-line">{asset.description}</p>
+              <Button className="mt-6 w-full bg-slate-800 hover:bg-blue-600" variant="outline">
+                선택하기
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Asset Selection Tutorial Overlay */}
+      {isTutorialActive && tutorialStep > 0 && (
+        <TutorialOverlay
+          currentStep={tutorialStep}
+          tutorialSteps={ASSET_SELECTION_TUTORIAL_STEPS}
+          isAssetSelectionTutorial={true}
+          onNext={() => {
+            if (tutorialStep < ASSET_SELECTION_TUTORIAL_STEPS.length) {
+              setTutorialStep(prev => prev + 1);
+            } else {
+              // Last step (4th), automatically proceed to game tutorial with default asset
+              setIsTutorialActive(false);
+              setTutorialStep(0);
+              // Use stock as default asset for tutorial
+              onSelect("stock");
+            }
+          }}
+          onPrev={() => {
+            if (tutorialStep > 1) {
+              setTutorialStep(prev => prev - 1);
+            }
+          }}
+          onSkip={() => {
+            setIsTutorialActive(false);
+            setTutorialStep(0);
+          }}
+          onComplete={() => {
+            // Last step complete, automatically proceed to game tutorial
+            setIsTutorialActive(false);
+            setTutorialStep(0);
+            // Use stock as default asset for tutorial
+            onSelect("stock");
+          }}
+        />
+      )}
+    </div>
+  );
+};
 
 // Ranking Display Component (reusable)
 const RankingsDisplay = memo(({ rankings, getRankIcon }: { rankings: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>, getRankIcon: (rank: number) => React.ReactNode }) => {
@@ -512,8 +689,7 @@ const RankingsDisplay = memo(({ rankings, getRankIcon }: { rankings: Array<{ id:
   );
 });
 
-const GameHome = ({ onStart, onTutorial }: { onStart: (asset: AssetType) => void, onTutorial: () => void }) => {
-  const [showRankings, setShowRankings] = useState(false);
+const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asset: AssetType) => void, onTutorial: () => void, onStartWithTutorial: () => void }) => {
   const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
 
   const fetchRankings = useCallback(async () => {
@@ -543,76 +719,127 @@ const GameHome = ({ onStart, onTutorial }: { onStart: (asset: AssetType) => void
   }, [fetchRankings]);
 
   return (
-    <>
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 space-y-8 animate-in fade-in zoom-in duration-500">
-        <div className="text-center space-y-2">
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tighter bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">
-            2분 투자 챌린지
-          </h1>
-          <p className="text-slate-400 text-lg max-w-md mx-auto">
-            2분 동안 최고의 수익률을 올려보세요.<br/>
-            뉴스를 읽고, 타이밍을 잡아 대박을 노리세요!
-          </p>
-          <div className="flex gap-2 justify-center mt-4">
-            <Button 
-              onClick={onTutorial}
-              variant="outline"
-              className="bg-slate-800/50 hover:bg-slate-700 border-slate-700"
-            >
-              <HelpCircle className="w-4 h-4 mr-2" />
-              튜토리얼 보기
-            </Button>
-            <Button 
-              onClick={() => {
-                fetchRankings();
-                setShowRankings(true);
+    <div className="min-h-screen flex items-center justify-center p-4 overflow-hidden">
+
+      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-5 gap-8">
+        {/* Left/Center: Game Start Section */}
+        <div className="lg:col-span-3 flex flex-col items-center justify-center space-y-8 animate-in fade-in zoom-in duration-500">
+          <motion.div 
+            className="text-center space-y-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <motion.h1 
+              className="text-5xl md:text-7xl font-bold tracking-tighter bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-500 bg-clip-text text-transparent"
+              animate={{
+                backgroundPosition: ['0%', '100%', '0%'],
               }}
-              variant="outline"
-              className="bg-slate-800/50 hover:bg-slate-700 border-slate-700"
+              transition={{
+                duration: 5,
+                repeat: Infinity,
+                ease: 'linear'
+              }}
+              style={{
+                backgroundSize: '200% auto'
+              }}
             >
-              <Trophy className="w-4 h-4 mr-2" />
-              랭킹 보기
-            </Button>
-          </div>
+              2분 투자 챌린지
+            </motion.h1>
+            <motion.p 
+              className="text-slate-300 text-lg md:text-xl max-w-md mx-auto leading-relaxed"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.6 }}
+            >
+              2분 동안 최고의 수익률을 올려보세요.<br/>
+              <span className="text-blue-400">뉴스를 읽고, 타이밍을 잡아</span> 대박을 노리세요!
+            </motion.p>
+            <motion.div 
+              className="flex gap-2 justify-center mt-8"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.5, duration: 0.4 }}
+            >
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="relative"
+              >
+                <Button 
+                  onClick={onStartWithTutorial}
+                  className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-700 hover:to-cyan-600 text-white text-lg px-8 py-6 rounded-xl shadow-lg shadow-blue-500/50 relative overflow-hidden group"
+                >
+                  <span className="relative z-10 flex items-center gap-2">
+                    <Play className="w-5 h-5" />
+                    게임 시작
+                  </span>
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100"
+                    initial={false}
+                    transition={{ duration: 0.3 }}
+                  />
+                </Button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
         </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-4xl">
-        {ASSETS.map((asset) => (
-          <Card 
-            key={asset.id} 
-            className="group hover:border-blue-500/50 transition-all duration-300 hover:-translate-y-1 cursor-pointer bg-slate-900/50 backdrop-blur border-slate-800"
-            onClick={() => onStart(asset.id)}
-          >
-            <CardHeader className="text-center pb-2">
-              <div className="mx-auto bg-slate-800 p-4 rounded-full mb-4 group-hover:bg-slate-700 transition-colors">
-                <asset.icon className={`w-10 h-10 ${asset.color}`} />
-              </div>
-              <CardTitle className="text-xl">{asset.name}</CardTitle>
+        {/* Right: Rankings Table */}
+        <motion.div 
+          className="lg:col-span-2 flex flex-col h-full max-h-[calc(100vh-2rem)]"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.4, duration: 0.6 }}
+        >
+          <Card className="bg-slate-900/80 backdrop-blur-sm border-slate-800 shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col h-full min-h-0">
+            <CardHeader className="pb-3 border-b border-slate-800 shrink-0">
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-yellow-500" />
+                현재 랭킹
+              </CardTitle>
             </CardHeader>
-            <CardContent className="text-center">
-              <p className="text-sm text-slate-400 whitespace-pre-line">{asset.description}</p>
-              <Button className="mt-6 w-full bg-slate-800 hover:bg-blue-600" variant="outline">
-                선택하기
-              </Button>
+            <CardContent className="p-4 flex-1 overflow-y-auto min-h-0">
+              {rankings.length === 0 ? (
+                <p className="text-center text-slate-400 py-8 text-sm">아직 등록된 랭킹이 없습니다.</p>
+              ) : (
+                <div className="space-y-2">
+                  {rankings.map((ranking, index) => {
+                    const rank = index + 1;
+                    const isPositive = ranking.returnRate >= 0;
+                    return (
+                      <motion.div
+                        key={ranking.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800/80 transition-all duration-200 cursor-pointer group"
+                        whileHover={{ scale: 1.02, x: 4 }}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center w-6">
+                            {getRankIcon(rank)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors">{ranking.name}</p>
+                            <p className="text-xs text-slate-400">{formatMoney(ranking.finalValue)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-mono font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                            {ranking.returnRate > 0 ? '+' : ''}{ranking.returnRate.toFixed(2)}%
+                          </p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
-        ))}
+        </motion.div>
       </div>
-      </div>
-
-      {/* Rankings Dialog */}
-      <Dialog open={showRankings} onOpenChange={setShowRankings}>
-        <DialogContent className="bg-slate-900 border-slate-800 max-w-md max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-              <Trophy className="w-6 h-6 text-yellow-500" />
-              랭킹
-            </DialogTitle>
-          </DialogHeader>
-          <RankingsDisplay rankings={rankings} getRankIcon={getRankIcon} />
-        </DialogContent>
-      </Dialog>
-    </>
+    </div>
   );
 };
 
@@ -985,6 +1212,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
       {isTutorialActive && tutorialStep > 0 && (
         <TutorialOverlay
           currentStep={tutorialStep}
+          tutorialSteps={TUTORIAL_STEPS}
           onNext={() => {
             if (tutorialStep < TUTORIAL_STEPS.length) {
               setTutorialStep(prev => prev + 1);
@@ -1002,7 +1230,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
           onComplete={() => {
             setIsTutorialActive(false);
             setTutorialStep(0);
-            // Return to game start screen when tutorial ends
+            // Return to asset selection screen when tutorial ends
             if (onTutorialEnd) {
               onTutorialEnd();
             }
@@ -1191,27 +1419,45 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
 };
 
 export default function InvestmentGame() {
-  const [status, setStatus] = useState<"idle" | "playing" | "ended">("idle");
+  const [status, setStatus] = useState<"idle" | "assetSelection" | "playing" | "ended">("idle");
   const [selectedAsset, setSelectedAsset] = useState<AssetType | null>(null);
   const [finalResult, setFinalResult] = useState(0);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showAssetSelectionTutorial, setShowAssetSelectionTutorial] = useState(false);
 
   const startGame = (asset: AssetType) => {
     setSelectedAsset(asset);
     setStatus("playing");
   };
 
+  const startGameWithTutorial = () => {
+    // Go to asset selection screen with tutorial
+    setShowAssetSelectionTutorial(true);
+    setStatus("assetSelection");
+  };
+
   const startTutorial = () => {
-    // Start with a default asset for tutorial
+    // Start with a default asset for tutorial (old way, for "튜토리얼 보기" button)
     setSelectedAsset("stock");
     setShowTutorial(true);
+    setStatus("playing");
+  };
+
+  const handleAssetSelected = (asset: AssetType) => {
+    // Asset selected from AssetSelection component
+    // If coming from tutorial end, start game without tutorial
+    // If coming from game start button, start game with tutorial
+    setSelectedAsset(asset);
+    setShowTutorial(showAssetSelectionTutorial);
     setStatus("playing");
   };
 
   const endTutorial = () => {
     setShowTutorial(false);
     setSelectedAsset(null);
-    setStatus("idle");
+    // Go to asset selection screen without tutorial
+    setShowAssetSelectionTutorial(false);
+    setStatus("assetSelection");
   };
 
   const endGame = (finalVal: number) => {
@@ -1262,7 +1508,24 @@ export default function InvestmentGame() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
           >
-            <GameHome onStart={startGame} onTutorial={startTutorial} />
+            <GameHome onStart={startGame} onTutorial={startTutorial} onStartWithTutorial={startGameWithTutorial} />
+          </motion.div>
+        )}
+        {status === "assetSelection" && (
+          <motion.div 
+            key="assetSelection"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.05 }}
+          >
+            <AssetSelection 
+              onSelect={handleAssetSelected}
+              showTutorial={showAssetSelectionTutorial}
+              onTutorialEnd={() => {
+                // Tutorial ended, but asset should already be selected
+                // This callback is not needed for asset selection tutorial
+              }}
+            />
           </motion.div>
         )}
         {status === "playing" && selectedAsset && (
