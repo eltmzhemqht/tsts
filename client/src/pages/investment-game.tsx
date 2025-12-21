@@ -930,7 +930,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
       newsIntervalRef.current = setTimeout(() => {
         const currentTime = timeLeftRef.current;
         if (currentTime > 5) {
-          triggerNews();
+        triggerNews();
           scheduleNextNews(); // Only schedule if time remains
         }
       }, nextNewsTime);
@@ -1181,7 +1181,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
               <div className="relative flex items-center justify-center gap-2">
                 <TrendingUp className="w-5 h-5" />
                 <span>전액 매수 (BUY)</span>
-              </div>
+          </div>
             </Button>
             <Button 
               data-tutorial="sell"
@@ -1202,9 +1202,9 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
               <div className="relative flex items-center justify-center gap-2">
                 <TrendingDown className="w-5 h-5" />
                 <span>전액 매도 (SELL)</span>
-              </div>
+        </div>
             </Button>
-          </div>
+      </div>
         </div>
       </div>
       
@@ -1257,7 +1257,7 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
   else if (returnRate > 20) message = "훌륭한 감각입니다! 야수의 심장을 가지셨군요.";
   else if (returnRate > 0) message = "은행 이자보다는 낫네요! 소소한 수익 축하합니다.";
   else if (returnRate > -20) message = "수업료 냈다고 생각하세요... 다음엔 더 잘할 수 있습니다.";
-  else message = "한강 물 온도 체크하러 가야할지도...? 😭";
+  else message = "아쉽네요! 다시 도전해보세요.";
 
   const submitRanking = async () => {
     if (!playerName.trim() || playerName.trim().length > 10) return;
@@ -1327,33 +1327,33 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 animate-in zoom-in duration-500">
-        <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl">
-          <CardHeader className="text-center space-y-4 pt-10">
-            <div className={`mx-auto p-6 rounded-full ${isProfit ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-              {isProfit ? <TrendingUp className="w-16 h-16" /> : <TrendingDown className="w-16 h-16" />}
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 animate-in zoom-in duration-500">
+      <Card className="w-full max-w-lg bg-slate-900 border-slate-800 shadow-2xl">
+        <CardHeader className="text-center space-y-4 pt-10">
+          <div className={`mx-auto p-6 rounded-full ${isProfit ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+            {isProfit ? <TrendingUp className="w-16 h-16" /> : <TrendingDown className="w-16 h-16" />}
+          </div>
+          <CardTitle className="text-3xl font-bold">투자 종료!</CardTitle>
+          <CardDescription className="text-lg">{message}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 pb-10">
+          <div className="space-y-2 bg-slate-800/50 p-6 rounded-xl border border-slate-800">
+            <div className="flex justify-between text-slate-400">
+              <span>초기 자본</span>
+              <span>{formatMoney(INITIAL_CAPITAL)}</span>
             </div>
-            <CardTitle className="text-3xl font-bold">투자 종료!</CardTitle>
-            <CardDescription className="text-lg">{message}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6 pb-10">
-            <div className="space-y-2 bg-slate-800/50 p-6 rounded-xl border border-slate-800">
-              <div className="flex justify-between text-slate-400">
-                <span>초기 자본</span>
-                <span>{formatMoney(INITIAL_CAPITAL)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-xl">
-                <span>최종 자산</span>
-                <span className={isProfit ? 'text-green-400' : 'text-red-400'}>{formatMoney(finalValue)}</span>
-              </div>
-              <div className="border-t border-slate-700 my-2 pt-2 flex justify-between items-center">
-                <span className="text-slate-400">수익률</span>
-                <span className={`text-2xl font-mono font-bold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
-                  {returnRate > 0 ? '+' : ''}{returnRate.toFixed(2)}%
-                </span>
-              </div>
+            <div className="flex justify-between font-bold text-xl">
+              <span>최종 자산</span>
+              <span className={isProfit ? 'text-green-400' : 'text-red-400'}>{formatMoney(finalValue)}</span>
             </div>
-
+            <div className="border-t border-slate-700 my-2 pt-2 flex justify-between items-center">
+              <span className="text-slate-400">수익률</span>
+              <span className={`text-2xl font-mono font-bold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
+                {returnRate > 0 ? '+' : ''}{returnRate.toFixed(2)}%
+              </span>
+            </div>
+          </div>
+          
             {/* Ranking Section */}
             {!isRankingSubmitted ? (
               <div className="space-y-3 bg-slate-800/50 p-4 rounded-xl border border-slate-800">
@@ -1395,12 +1395,12 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
                 랭킹 보기
               </Button>
               <Button onClick={onRestart} className="flex-1 h-12 text-lg font-bold" variant="default">
-                <RotateCcw className="mr-2 w-5 h-5" /> 다시 도전하기
-              </Button>
+            <RotateCcw className="mr-2 w-5 h-5" /> 다시 도전하기
+          </Button>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+        </CardContent>
+      </Card>
+    </div>
 
       {/* Rankings Dialog */}
       <Dialog open={showRankings} onOpenChange={setShowRankings}>
