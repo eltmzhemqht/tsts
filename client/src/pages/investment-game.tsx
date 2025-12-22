@@ -72,49 +72,54 @@ const INITIAL_CAPITAL = 20000000; // 20 million KRW
 
 // News Events
 const NEWS_EVENTS = [
-  // 호재 (Good News)
-  { text: "정부, 해당 자산 규제 완화 발표!", impact: 1.15, type: "good" },
-  { text: "대형 기관 투자자 매수세 유입", impact: 1.10, type: "good" },
-  { text: "기술적 반등 구간 진입", impact: 1.08, type: "good" },
-  { text: "깜짝 실적/업데이트 발표", impact: 1.25, type: "good" },
-  { text: "유명 인플루언서의 긍정적 언급", impact: 1.12, type: "good" },
-  { text: "신규 기술 개발 성공 소식", impact: 1.20, type: "good" },
-  { text: "글로벌 투자은행 매수 추천", impact: 1.18, type: "good" },
-  { text: "대형 M&A 소식, 시장 기대감 상승", impact: 1.22, type: "good" },
-  { text: "주요 국가 승인 및 라이선스 획득", impact: 1.16, type: "good" },
-  { text: "파트너십 체결, 협력 확대 발표", impact: 1.13, type: "good" },
-  { text: "분기 실적 시장 기대치 초과 달성", impact: 1.19, type: "good" },
-  { text: "신제품 출시, 시장 반응 긍정적", impact: 1.14, type: "good" },
-  { text: "대형 펀드의 대규모 투자 유입", impact: 1.21, type: "good" },
-  { text: "정부 지원 정책 발표", impact: 1.17, type: "good" },
-  { text: "전문가들, 상승 전망 제시", impact: 1.11, type: "good" },
-  { text: "유동성 공급 확대 소식", impact: 1.09, type: "good" },
-  { text: "주요 거래소 상장 확정", impact: 1.24, type: "good" },
-  { text: "기관 투자자들의 적극적 매수", impact: 1.15, type: "good" },
-  { text: "글로벌 기업과의 전략적 제휴", impact: 1.20, type: "good" },
-  { text: "시장 리더십 강화 발표", impact: 1.18, type: "good" },
+  // Good News
+  { text: "미국 연준, 기준금리 동결 결정", impact: 1.15, type: "good" },
+  { text: "트럼프 대통령, 자산 규제 완화 발표", impact: 1.20, type: "good" },
+  { text: "바이든 대통령, 인프라 투자 확대 계획 발표", impact: 1.18, type: "good" },
+  { text: "유럽중앙은행(ECB), 양적완화 정책 지속", impact: 1.12, type: "good" },
+  { text: "일본은행, 저금리 정책 유지 발표", impact: 1.10, type: "good" },
+  { text: "중국 인민은행, 유동성 공급 확대", impact: 1.16, type: "good" },
+  { text: "아마존, 분기 실적 시장 기대치 초과 달성", impact: 1.22, type: "good" },
+  { text: "테슬라, 신기술 개발 성공 발표", impact: 1.25, type: "good" },
+  { text: "애플, 신제품 출시로 주가 상승", impact: 1.19, type: "good" },
+  { text: "구글, 대형 M&A 발표로 시장 기대감 상승", impact: 1.21, type: "good" },
+  { text: "마이크로소프트, 클라우드 사업 호조 발표", impact: 1.17, type: "good" },
+  { text: "나스닥, 신기록 고점 달성", impact: 1.14, type: "good" },
+  { text: "S&P 500, 연일 상승세 지속", impact: 1.13, type: "good" },
+  { text: "골드만삭스, 해당 자산 매수 추천", impact: 1.18, type: "good" },
+  { text: "JP모건, 긍정적 전망 보고서 발표", impact: 1.15, type: "good" },
+  { text: "블랙록, 대규모 투자 유입 발표", impact: 1.20, type: "good" },
+  { text: "워렌 버핏, 해당 자산 대량 매수", impact: 1.24, type: "good" },
+  { text: "중국 정부, 디지털 자산 규제 완화", impact: 1.16, type: "good" },
+  { text: "EU, 암호화폐 규제 완화 법안 통과", impact: 1.19, type: "good" },
+  { text: "한국은행, 기준금리 동결 유지", impact: 1.11, type: "good" },
+  { text: "네이버, 클라우드 사업 대규모 수주 성공", impact: 1.17, type: "good" },
+  { text: "삼성전자, 반도체 수요 급증으로 실적 호조", impact: 1.20, type: "good" },
+  { text: "SK하이닉스, 메모리 반도체 가격 상승으로 수익성 개선", impact: 1.18, type: "good" },
   
-  // 악재 (Bad News)
-  { text: "글로벌 경제 위기 우려 확산", impact: 0.85, type: "bad" },
-  { text: "차익 실현 매물 쏟아짐", impact: 0.90, type: "bad" },
-  { text: "해킹/보안 이슈 발생!", impact: 0.75, type: "bad" },
-  { text: "주요국 금리 인상 발표", impact: 0.88, type: "bad" },
-  { text: "경영진 비리 의혹 제기", impact: 0.80, type: "bad" },
-  { text: "규제 강화 우려 확산", impact: 0.82, type: "bad" },
-  { text: "대형 투자자들의 대량 매도", impact: 0.78, type: "bad" },
-  { text: "경쟁사 신제품 출시, 시장 점유율 위협", impact: 0.86, type: "bad" },
-  { text: "주요 고객사와의 계약 해지 소식", impact: 0.83, type: "bad" },
-  { text: "분기 실적 시장 기대치 하회", impact: 0.79, type: "bad" },
-  { text: "기술적 하락 추세 전환", impact: 0.87, type: "bad" },
-  { text: "전문가들, 하락 전망 제시", impact: 0.84, type: "bad" },
-  { text: "유동성 부족 우려 확산", impact: 0.81, type: "bad" },
-  { text: "주요 거래소 상장 철회 소식", impact: 0.72, type: "bad" },
-  { text: "대규모 손실 발생 보고", impact: 0.76, type: "bad" },
-  { text: "정부 규제 강화 법안 통과", impact: 0.83, type: "bad" },
-  { text: "경쟁사가 더 나은 기술 공개", impact: 0.88, type: "bad" },
-  { text: "주요 파트너와의 관계 악화", impact: 0.85, type: "bad" },
-  { text: "시장 과열 우려, 조정 필요성 제기", impact: 0.89, type: "bad" },
-  { text: "글로벌 경제 침체 우려 확산", impact: 0.77, type: "bad" },
+  // Bad News
+  { text: "미국 연준, 기준금리 0.5%p 인상 발표", impact: 0.88, type: "bad" },
+  { text: "트럼프 대통령, 자산 규제 강화 발표", impact: 0.82, type: "bad" },
+  { text: "바이든 대통령, 증세 정책 발표", impact: 0.85, type: "bad" },
+  { text: "유럽중앙은행(ECB), 금리 인상 발표", impact: 0.87, type: "bad" },
+  { text: "일본은행, 통화정책 전환 검토", impact: 0.89, type: "bad" },
+  { text: "중국 인민은행, 금리 인상 결정", impact: 0.86, type: "bad" },
+  { text: "아마존, 분기 실적 시장 기대치 하회", impact: 0.79, type: "bad" },
+  { text: "테슬라, 리콜 발표로 주가 하락", impact: 0.76, type: "bad" },
+  { text: "애플, 공급망 차질로 생산 지연", impact: 0.83, type: "bad" },
+  { text: "구글, 규제 당국 조사 착수", impact: 0.80, type: "bad" },
+  { text: "마이크로소프트, 보안 이슈 발생", impact: 0.78, type: "bad" },
+  { text: "나스닥, 급락세 시작", impact: 0.85, type: "bad" },
+  { text: "S&P 500, 조정 국면 진입", impact: 0.88, type: "bad" },
+  { text: "골드만삭스, 해당 자산 매도 추천", impact: 0.82, type: "bad" },
+  { text: "JP모건, 부정적 전망 보고서 발표", impact: 0.84, type: "bad" },
+  { text: "블랙록, 대규모 매도 결정", impact: 0.77, type: "bad" },
+  { text: "워렌 버핏, 해당 자산 대량 매도", impact: 0.75, type: "bad" },
+  { text: "중국 정부, 디지털 자산 규제 강화", impact: 0.81, type: "bad" },
+  { text: "EU, 암호화폐 규제 강화 법안 통과", impact: 0.83, type: "bad" },
+  { text: "한국은행, 기준금리 인상 발표", impact: 0.87, type: "bad" },
+  { text: "글로벌 경제 침체 우려 확산", impact: 0.80, type: "bad" },
+  { text: "인플레이션 우려로 시장 불안 확산", impact: 0.86, type: "bad" },
 ];
 
 interface NewsItem {
@@ -218,7 +223,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 2,
     title: "뉴스 확인",
-    description: "뉴스가 나타나면 호재(초록색)인지 악재(빨간색)인지 확인하세요. 뉴스가 나온 후 1.5초 후에 가격이 변동됩니다.",
+    description: "뉴스가 나타나면 내용을 빠르게 읽고 분석하세요. 뉴스가 나온 후 2.5초 후에 가격이 변동됩니다.",
     target: "[data-tutorial='news']",
     position: "bottom"
   },
@@ -232,14 +237,14 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 4,
     title: "매수 버튼",
-    description: "호재 뉴스가 나오면 매수 버튼을 눌러 자산을 구매하세요. 전액 매수로 모든 현금을 사용합니다.",
+    description: "가격 상승이 예상될 때 매수 버튼을 눌러 자산을 구매하세요. 전액 매수로 모든 현금을 사용합니다.",
     target: "[data-tutorial='buy']",
     position: "left"
   },
   {
     id: 5,
     title: "매도 버튼",
-    description: "악재 뉴스가 나오거나 수익을 실현하고 싶을 때 매도 버튼을 눌러 모든 자산을 판매하세요.",
+    description: "가격 하락이 예상되거나 수익을 실현하고 싶을 때 매도 버튼을 눌러 모든 자산을 판매하세요.",
     target: "[data-tutorial='sell']",
     position: "left"
   },
@@ -279,10 +284,26 @@ const TutorialOverlay = ({
   hideLastButton?: boolean;
   isAssetSelectionTutorial?: boolean;
 }) => {
+  const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
+  
+  // Early validation: Check if tutorialSteps is valid and currentStep is in range
+  if (!tutorialSteps || tutorialSteps.length === 0 || currentStep < 1 || currentStep > tutorialSteps.length) {
+    return null;
+  }
+  
   const step = tutorialSteps[currentStep - 1];
+  
+  if (!step || typeof step !== 'object') {
+    return null;
+  }
+  
+  const stepPosition = step?.position;
+  const stepTitle = step?.title || '';
+  const stepDescription = step?.description || '';
+  const stepTarget = step?.target;
+  
   const isFirst = currentStep === 1;
   const isLast = currentStep === tutorialSteps.length;
-  const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
   
   // Calculate card position to avoid highlighted element
   const getCardPosition = () => {
@@ -376,9 +397,12 @@ const TutorialOverlay = ({
   };
 
   useEffect(() => {
-    // Highlight target element
-    if (step.target) {
-      const element = document.querySelector(step.target) as HTMLElement;
+    if (!stepTarget) {
+      setHighlightRect(null);
+      return;
+    }
+    
+    const element = document.querySelector(stepTarget) as HTMLElement;
       if (element) {
         // Get initial rect immediately to avoid jumping
         const initialRect = element.getBoundingClientRect();
@@ -408,10 +432,7 @@ const TutorialOverlay = ({
       } else {
         setHighlightRect(null);
       }
-    } else {
-      setHighlightRect(null);
-    }
-  }, [currentStep, step.target]);
+  }, [currentStep, stepTarget]);
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
@@ -425,8 +446,7 @@ const TutorialOverlay = ({
         }}
       />
       
-      {/* 밝게 강조되는 하이라이트 */}
-      {step.target && highlightRect && (
+      {stepTarget && highlightRect && (
         <div 
           style={{
             position: 'fixed',
@@ -442,12 +462,12 @@ const TutorialOverlay = ({
             WebkitBackdropFilter: 'brightness(2.2)',
             pointerEvents: 'none',
             transition: 'all 0.3s ease',
+            willChange: 'transform, opacity',
           }}
         />
       )}
 
-      {/* Tutorial Card */}
-      <div className={`absolute inset-0 pointer-events-none ${currentStep === 1 || step.position === "center" ? 'flex items-center justify-center' : ''}`}>
+      <div className={`absolute inset-0 pointer-events-none ${currentStep === 1 || stepPosition === "center" ? 'flex items-center justify-center' : ''}`}>
         <motion.div
           layout
           initial={false}
@@ -469,12 +489,12 @@ const TutorialOverlay = ({
           }}
           className="pointer-events-auto bg-slate-900 border-2 border-blue-500 rounded-xl shadow-2xl p-5 max-w-sm"
           style={{
-            ...(currentStep === 1 || step.position === "center" ? {
-              // First step or center position: always center using flexbox parent
+            willChange: 'transform, opacity',
+            ...(currentStep === 1 || stepPosition === "center" ? {
               position: 'relative',
             } : {
               position: 'absolute',
-              ...(step.target && highlightRect ? getCardPosition() : {
+              ...(stepTarget && highlightRect ? getCardPosition() : {
                 top: '50%',
                 left: '50%',
                 transform: 'translate(-50%, -50%)',
@@ -487,15 +507,16 @@ const TutorialOverlay = ({
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+            style={{ willChange: 'transform, opacity' }}
           >
             <div className="mb-4">
-              <h3 className="text-xl font-bold text-white mb-1">{step.title}</h3>
+              <h3 className="text-xl font-bold text-white mb-1">{stepTitle}</h3>
               <p className="text-sm text-slate-400">
                 {currentStep} / {tutorialSteps.length}
               </p>
             </div>
             
-            <p className="text-slate-300 mb-6 leading-relaxed">{step.description}</p>
+            <p className="text-slate-300 mb-6 leading-relaxed">{stepDescription}</p>
 
             <div className="flex items-center justify-between gap-2">
               <Button
@@ -719,8 +740,7 @@ const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asse
   }, [fetchRankings]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 overflow-hidden">
-
+    <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-5 gap-8">
         {/* Left/Center: Game Start Section */}
         <div className="lg:col-span-3 flex flex-col items-center justify-center space-y-8 animate-in fade-in zoom-in duration-500">
@@ -884,7 +904,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
     // Show news first - keep only last 10 news items
     setNewsHistory(prev => [newItem, ...prev.slice(0, 9)]);
     
-    // Apply price impact after a short delay (1.5 seconds) to give player time to react
+    // Apply price impact after a delay (2.5 seconds) to give player time to react
     setTimeout(() => {
       // Update both Ref (for intervals) and State (for UI)
       const prevPrice = currentPriceRef.current;
@@ -899,7 +919,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
         // Limit history to last 50 points for performance
         return newHistory.slice(-50); 
       });
-    }, 1500); // 1.5 second delay for player to read and react
+    }, 2500); // 2.5 second delay for player to read and react
   }, []);
 
   // Initialize Game
@@ -1062,12 +1082,6 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
                     className="w-full px-6 flex items-center justify-between gap-4"
                   >
                     <div className="flex items-center gap-4 overflow-hidden">
-                      <span className={`
-                        shrink-0 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider
-                        ${newsHistory[0].type === 'good' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}
-                      `}>
-                        {newsHistory[0].type === 'good' ? '호재' : '악재'}
-                      </span>
                       <span className="text-lg md:text-xl font-bold text-white truncate">
                         {newsHistory[0].text}
                       </span>
