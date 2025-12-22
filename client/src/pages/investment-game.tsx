@@ -885,6 +885,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   // Refs for intervals and game loop
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timeLeftRef = useRef(timeLeft);
+  const lastNewsTextRef = useRef<string | null>(null);
 
   // Keep timeLeftRef in sync with timeLeft
   useEffect(() => {
@@ -892,7 +893,15 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   }, [timeLeft]);
 
   const triggerNews = useCallback(() => {
-    const news = NEWS_EVENTS[Math.floor(Math.random() * NEWS_EVENTS.length)];
+    // Filter out the last news to prevent consecutive duplicates
+    const availableNews = NEWS_EVENTS.filter(news => news.text !== lastNewsTextRef.current);
+    
+    // If all news were filtered out (shouldn't happen, but safety check), use all news
+    const newsPool = availableNews.length > 0 ? availableNews : NEWS_EVENTS;
+    
+    const news = newsPool[Math.floor(Math.random() * newsPool.length)];
+    lastNewsTextRef.current = news.text;
+    
     const newItem: NewsItem = {
       id: Date.now(),
       time: GAME_DURATION - timeLeftRef.current,
@@ -943,10 +952,10 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
       });
     }, 1000);
 
-    // News Event Generator - Faster Frequency (3s - 8s)
+    // News Event Generator - Frequency (5s - 8s)
     const scheduleNextNews = () => {
-      // Random time between 3s and 8s for next news
-      const nextNewsTime = Math.random() * (8000 - 3000) + 3000;
+      // Random time between 5s and 8s for next news
+      const nextNewsTime = Math.random() * (8000 - 5000) + 5000;
       newsIntervalRef.current = setTimeout(() => {
         const currentTime = timeLeftRef.current;
         if (currentTime > 5) {
