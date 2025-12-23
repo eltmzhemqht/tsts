@@ -36,7 +36,8 @@ export function metaImagesPlugin(): Plugin {
         return html;
       }
 
-      const imageUrl = `${baseUrl}/opengraph.${imageExt}`;
+      // If baseUrl is available, use absolute URL, otherwise keep relative path
+      const imageUrl = baseUrl ? `${baseUrl}/opengraph.${imageExt}` : `/opengraph.${imageExt}`;
 
       log('[meta-images] updating meta image tags to:', imageUrl);
 
@@ -56,6 +57,14 @@ export function metaImagesPlugin(): Plugin {
 }
 
 function getDeploymentUrl(): string | null {
+  // Render deployment
+  if (process.env.RENDER_EXTERNAL_URL) {
+    const url = process.env.RENDER_EXTERNAL_URL;
+    log('[meta-images] using Render external URL:', url);
+    return url;
+  }
+
+  // Replit deployment
   if (process.env.REPLIT_INTERNAL_APP_DOMAIN) {
     const url = `https://${process.env.REPLIT_INTERNAL_APP_DOMAIN}`;
     log('[meta-images] using internal app domain:', url);
@@ -68,6 +77,8 @@ function getDeploymentUrl(): string | null {
     return url;
   }
 
+  // Fallback: Use hardcoded Render URL if available
+  // This will be replaced during build if RENDER_EXTERNAL_URL is set
   return null;
 }
 

@@ -39,6 +39,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // 파일명에 해시 추가 보장 (캐시 무효화를 위해 중요)
+    rollupOptions: {
+      output: {
+        entryFileNames: "assets/[name].[hash].js",
+        chunkFileNames: "assets/[name].[hash].js",
+        assetFileNames: "assets/[name].[hash].[ext]",
+      },
+    },
+    // 빌드 시마다 고유한 해시 생성 보장
+    manifest: true,
   },
   server: {
     host: "0.0.0.0",
