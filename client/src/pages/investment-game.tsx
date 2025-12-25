@@ -671,7 +671,7 @@ const AssetSelection = ({
 };
 
 // Ranking Display Component (reusable)
-const RankingsDisplay = memo(({ rankings, getRankIcon }: { rankings: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>, getRankIcon: (rank: number) => React.ReactNode }) => {
+const RankingsDisplay = memo(({ rankings, getRankIcon, previousRankings = [] }: { rankings: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>, getRankIcon: (rank: number) => React.ReactNode, previousRankings?: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }> }) => {
   return (
     <div className="space-y-2 mt-4">
       {rankings.length === 0 ? (
@@ -680,29 +680,53 @@ const RankingsDisplay = memo(({ rankings, getRankIcon }: { rankings: Array<{ id:
         rankings.map((ranking, index) => {
           const rank = index + 1;
           const isPositive = ranking.returnRate >= 0;
+          const isNew = !previousRankings.find((r: { id: string }) => r.id === ranking.id);
+          const previousRank = previousRankings.findIndex((r: { id: string }) => r.id === ranking.id) + 1;
+          const rankChanged = previousRank > 0 && previousRank !== rank;
+          const rankImproved = previousRank > 0 && rank < previousRank;
+          
           return (
-            <div
+            <motion.div
               key={ranking.id}
               className={`flex items-center gap-3 p-3 rounded-lg ${
                 rank <= 3 ? 'bg-slate-800/80 border border-slate-700' : 'bg-slate-800/50'
               }`}
+              initial={isNew ? { opacity: 0, y: -10, scale: 0.95 } : false}
+              animate={isNew ? { 
+                opacity: 1, 
+                y: 0, 
+                scale: 1
+              } : rankChanged ? {
+                backgroundColor: rankImproved 
+                  ? ["rgba(34, 197, 94, 0.2)", "rgba(30, 41, 59, 0.8)"] 
+                  : ["rgba(59, 130, 246, 0.2)", "rgba(30, 41, 59, 0.8)"],
+                scale: [1, 1.02, 1]
+              } : {}}
+              transition={isNew ? { 
+                duration: 0.3,
+                delay: index * 0.02
+              } : rankChanged ? {
+                duration: 0.5,
+                backgroundColor: { duration: 0.3 },
+                scale: { duration: 0.2 }
+              } : {}}
             >
               <div className="flex items-center justify-center w-8">
                 {getRankIcon(rank)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-white truncate">{ranking.name}</p>
-                <p className="text-xs text-slate-400">
+                <p className="font-bold text-white truncate select-none">{ranking.name}</p>
+                <p className="text-xs text-slate-400 select-none">
                   {new Date(ranking.createdAt).toLocaleString('ko-KR')}
                 </p>
               </div>
               <div className="text-right">
-                <p className={`font-mono font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                <p className={`font-mono font-bold ${isPositive ? 'text-green-500' : 'text-red-500'} select-none`}>
                   {ranking.returnRate > 0 ? '+' : ''}{ranking.returnRate.toFixed(2)}%
                 </p>
-                <p className="text-xs text-slate-400">{formatMoney(ranking.finalValue)}</p>
+                <p className="text-xs text-slate-400 select-none">{formatMoney(ranking.finalValue)}</p>
               </div>
-            </div>
+            </motion.div>
           );
         })
       )}
@@ -712,13 +736,20 @@ const RankingsDisplay = memo(({ rankings, getRankIcon }: { rankings: Array<{ id:
 
 const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asset: AssetType) => void, onTutorial: () => void, onStartWithTutorial: () => void }) => {
   const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
+  const previousRankingsRef = useRef<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
 
   const fetchRankings = useCallback(async () => {
     try {
       const response = await fetch("/api/rankings?limit=20");
       if (response.ok) {
         const data = await response.json();
-        setRankings(data);
+        
+        // Check if rankings have changed
+        const hasChanged = JSON.stringify(data) !== JSON.stringify(previousRankingsRef.current);
+        if (hasChanged) {
+          previousRankingsRef.current = data;
+          setRankings(data);
+        }
       } else {
         const errorText = await response.text();
         console.error("Failed to fetch rankings:", response.status, errorText);
@@ -727,6 +758,27 @@ const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asse
       console.error("Failed to fetch rankings:", error);
     }
   }, []);
+
+  const clearRankings = useCallback(async () => {
+    if (!confirm("정말로 모든 랭킹을 초기화하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
+      return;
+    }
+    
+    try {
+      const response = await fetch("/api/rankings", {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        alert("랭킹이 초기화되었습니다.");
+        await fetchRankings(); // 랭킹 목록 새로고침
+      } else {
+        alert("랭킹 초기화에 실패했습니다.");
+      }
+    } catch (error) {
+      console.error("Failed to clear rankings:", error);
+      alert("랭킹 초기화 중 오류가 발생했습니다.");
+    }
+  }, [fetchRankings]);
 
   const getRankIcon = useCallback((rank: number) => {
     if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
@@ -737,13 +789,33 @@ const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asse
 
   useEffect(() => {
     fetchRankings();
+    
+    // 실시간 랭킹 업데이트 (2초마다)
+    const interval = setInterval(() => {
+      fetchRankings();
+    }, 2000);
+    
+    return () => clearInterval(interval);
   }, [fetchRankings]);
 
+  // 단축키: Ctrl+Shift+R로 랭킹 초기화
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === "R") {
+        e.preventDefault();
+        clearRankings();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [clearRankings]);
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-5 gap-8">
+    <div className="min-h-screen flex items-center p-4 lg:p-0">
+      <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-0 lg:gap-8">
         {/* Left/Center: Game Start Section */}
-        <div className="lg:col-span-3 flex flex-col items-center justify-center space-y-8 animate-in fade-in zoom-in duration-500">
+        <div className="lg:col-span-4 flex flex-col items-center justify-center space-y-8 animate-in fade-in zoom-in duration-500 lg:pl-8">
           <motion.div 
             className="text-center space-y-6"
             initial={{ opacity: 0, y: 20 }}
@@ -807,46 +879,67 @@ const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asse
 
         {/* Right: Rankings Table */}
         <motion.div 
-          className="lg:col-span-2 flex flex-col h-full max-h-[calc(100vh-2rem)]"
+          className="lg:col-span-8 flex flex-col h-full max-h-screen lg:pr-0"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.4, duration: 0.6 }}
         >
-          <Card className="bg-slate-900/80 backdrop-blur-sm border-slate-800 shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col h-full min-h-0">
-            <CardHeader className="pb-3 border-b border-slate-800 shrink-0">
-              <CardTitle className="text-xl font-bold flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-yellow-500" />
+          <Card className="bg-slate-900/80 backdrop-blur-sm border-slate-800 border-r-0 lg:rounded-r-none shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 flex flex-col h-full min-h-0 lg:h-screen">
+            <CardHeader className="pb-4 border-b border-slate-800 shrink-0">
+              <CardTitle className="text-2xl font-bold flex items-center gap-3">
+                <Trophy className="w-6 h-6 text-yellow-500" />
                 현재 랭킹
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 flex-1 overflow-y-auto min-h-0">
+            <CardContent className="p-6 flex-1 overflow-y-auto min-h-0">
               {rankings.length === 0 ? (
                 <p className="text-center text-slate-400 py-8 text-sm">아직 등록된 랭킹이 없습니다.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {rankings.map((ranking, index) => {
                     const rank = index + 1;
                     const isPositive = ranking.returnRate >= 0;
+                    const isNew = !previousRankingsRef.current.find((r: { id: string }) => r.id === ranking.id);
+                    const previousRank = previousRankingsRef.current.findIndex((r: { id: string }) => r.id === ranking.id) + 1;
+                    const rankChanged = previousRank > 0 && previousRank !== rank;
+                    const rankImproved = previousRank > 0 && rank < previousRank;
+                    
                     return (
                       <motion.div
                         key={ranking.id}
-                        className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 hover:bg-slate-800/80 transition-all duration-200 cursor-pointer group"
-                        whileHover={{ scale: 1.02, x: 4 }}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
+                        className="flex items-center justify-between p-4 rounded-xl bg-slate-800/50 hover:bg-slate-800/80 cursor-pointer group border border-slate-700/50 hover:border-slate-600"
+                        whileHover={{ scale: 1.02, x: 4, transition: { duration: 0.1 } }}
+                        initial={isNew ? { opacity: 0, y: -20, scale: 0.9 } : false}
+                        animate={isNew ? { 
+                          opacity: 1, 
+                          y: 0, 
+                          scale: 1
+                        } : rankChanged ? {
+                          backgroundColor: rankImproved 
+                            ? ["rgba(34, 197, 94, 0.2)", "rgba(30, 41, 59, 0.5)"] 
+                            : ["rgba(59, 130, 246, 0.2)", "rgba(30, 41, 59, 0.5)"],
+                          scale: [1, 1.02, 1]
+                        } : {}}
+                        transition={isNew ? { 
+                          duration: 0.4,
+                          delay: index * 0.03
+                        } : rankChanged ? {
+                          duration: 0.6,
+                          backgroundColor: { duration: 0.4 },
+                          scale: { duration: 0.3 }
+                        } : { delay: index * 0.05 }}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center justify-center w-6">
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center justify-center w-8">
                             {getRankIcon(rank)}
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-white group-hover:text-blue-300 transition-colors">{ranking.name}</p>
-                            <p className="text-xs text-slate-400">{formatMoney(ranking.finalValue)}</p>
+                            <p className="text-base font-semibold text-white select-none">{ranking.name}</p>
+                            <p className="text-sm text-slate-400 mt-1 select-none">{formatMoney(ranking.finalValue)}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={`text-sm font-mono font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                          <p className={`text-lg font-mono font-bold ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
                             {ranking.returnRate > 0 ? '+' : ''}{ranking.returnRate.toFixed(2)}%
                           </p>
                         </div>
@@ -884,8 +977,10 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   
   // Refs for intervals and game loop
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const priceUpdateTimeoutsRef = useRef<NodeJS.Timeout[]>([]); // Track all pending price updates
   const timeLeftRef = useRef(timeLeft);
   const lastNewsTextRef = useRef<string | null>(null);
+  const isGameEndedRef = useRef(false); // Prevent multiple game end calls
 
   // Keep timeLeftRef in sync with timeLeft
   useEffect(() => {
@@ -893,6 +988,9 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   }, [timeLeft]);
 
   const triggerNews = useCallback(() => {
+    // Don't trigger news if game has ended
+    if (isGameEndedRef.current) return;
+    
     // Filter out the last news to prevent consecutive duplicates
     const availableNews = NEWS_EVENTS.filter(news => news.text !== lastNewsTextRef.current);
     
@@ -914,10 +1012,15 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
     setNewsHistory(prev => [newItem, ...prev.slice(0, 9)]);
     
     // Apply price impact after a delay (2.5 seconds) to give player time to react
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
+      // Don't update price if game has ended
+      if (isGameEndedRef.current) return;
+      
       // Update both Ref (for intervals) and State (for UI)
       const prevPrice = currentPriceRef.current;
-      const newPrice = Math.floor(prevPrice * news.impact);
+      if (prevPrice <= 0) return; // Safety check: prevent invalid price
+      
+      const newPrice = Math.max(1000000, Math.min(20000000, Math.floor(prevPrice * news.impact))); // Clamp price range
       
       currentPriceRef.current = newPrice;
       setCurrentPrice(newPrice);
@@ -928,11 +1031,20 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
         // Limit history to last 50 points for performance
         return newHistory.slice(-50); 
       });
+      
+      // Remove this timeout from tracking array
+      priceUpdateTimeoutsRef.current = priceUpdateTimeoutsRef.current.filter(id => id !== timeoutId);
     }, 2500); // 2.5 second delay for player to read and react
+    
+    // Track this timeout for cleanup
+    priceUpdateTimeoutsRef.current.push(timeoutId);
   }, []);
 
   // Initialize Game
   useEffect(() => {
+    // Reset game ended flag
+    isGameEndedRef.current = false;
+    
     // Initial history point
     setPriceHistory([{ time: 0, price: currentPriceRef.current }]);
 
@@ -946,6 +1058,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
         // Normal game: countdown normally
         if (prev <= 1) {
           clearInterval(timerInterval);
+          isGameEndedRef.current = true; // Mark game as ended
           return 0;
         }
         return prev - 1;
@@ -954,12 +1067,15 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
 
     // News Event Generator - Frequency (5s - 8s)
     const scheduleNextNews = () => {
+      // Don't schedule if game ended
+      if (isGameEndedRef.current) return;
+      
       // Random time between 5s and 8s for next news
       const nextNewsTime = Math.random() * (8000 - 5000) + 5000;
       newsIntervalRef.current = setTimeout(() => {
         const currentTime = timeLeftRef.current;
-        if (currentTime > 5) {
-        triggerNews();
+        if (currentTime > 5 && !isGameEndedRef.current) {
+          triggerNews();
           scheduleNextNews(); // Only schedule if time remains
         }
       }, nextNewsTime);
@@ -974,19 +1090,24 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
         clearTimeout(newsIntervalRef.current);
         newsIntervalRef.current = null;
       }
+      // Clear all pending price update timeouts
+      priceUpdateTimeoutsRef.current.forEach(timeoutId => clearTimeout(timeoutId));
+      priceUpdateTimeoutsRef.current = [];
+      isGameEndedRef.current = true; // Mark as ended on cleanup
     };
   }, [isTutorialActive, triggerNews]);
 
   // End Game Effect
   useEffect(() => {
-    if (timeLeft === 0) {
-      const finalValue = cash + (holdings * currentPriceRef.current);
+    if (timeLeft === 0 && !isGameEndedRef.current) {
+      isGameEndedRef.current = true; // Prevent multiple calls
+      const finalValue = Math.max(0, cash + (holdings * currentPriceRef.current)); // Ensure non-negative
       onEnd(finalValue);
     }
   }, [timeLeft, cash, holdings, onEnd]);
 
   const handleBuy = useCallback(() => {
-    if (cash < currentPrice) return; 
+    if (isGameEndedRef.current || currentPrice <= 0 || cash < currentPrice) return; 
     
     playSound('buy');
 
@@ -995,11 +1116,11 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
     if (quantity === 0) return;
 
     setHoldings(prev => prev + quantity);
-    setCash(prev => prev - (quantity * currentPrice));
+    setCash(prev => Math.max(0, prev - (quantity * currentPrice))); // Ensure non-negative
   }, [cash, currentPrice]);
 
   const handleSell = useCallback(() => {
-    if (holdings === 0) return;
+    if (isGameEndedRef.current || holdings === 0 || currentPrice <= 0) return;
     
     playSound('sell');
 
@@ -1012,19 +1133,6 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   const totalValue = useMemo(() => cash + (holdings * currentPrice), [cash, holdings, currentPrice]);
   const returnRate = useMemo(() => ((totalValue - INITIAL_CAPITAL) / INITIAL_CAPITAL) * 100, [totalValue]);
 
-  // Developer shortcut: Ctrl+Shift+E to end game
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && e.key === "E") {
-        e.preventDefault();
-        const finalValue = cash + (holdings * currentPrice);
-        onEnd(finalValue);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [cash, holdings, currentPrice, onEnd]);
 
   return (
     <div className="max-w-6xl mx-auto p-4 h-screen flex flex-col gap-4">
@@ -1274,6 +1382,7 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
   const [showRankings, setShowRankings] = useState(false);
   const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const previousRankingsRef = useRef<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
 
   let message = "";
   if (returnRate > 50) message = "투자천재의 탄생! 워렌 버핏이 형님이라 부르겠네요.";
@@ -1283,7 +1392,8 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
   else message = "아쉽네요! 다시 도전해보세요.";
 
   const submitRanking = async () => {
-    if (!playerName.trim() || playerName.trim().length > 10) return;
+    // Prevent duplicate submissions
+    if (isSubmitting || isRankingSubmitted || !playerName.trim() || playerName.trim().length > 10) return;
     
     setIsSubmitting(true);
     try {
@@ -1292,8 +1402,8 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: playerName.trim(),
-          returnRate,
-          finalValue,
+          returnRate: isNaN(returnRate) ? 0 : returnRate, // Safety check
+          finalValue: isNaN(finalValue) || finalValue < 0 ? 0 : finalValue, // Safety check
         }),
       });
       
@@ -1316,7 +1426,7 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
       }
     } catch (error) {
       console.error("Failed to submit ranking:", error);
-      alert("랭킹 등록 중 오류가 발생했습니다.");
+      alert("랭킹 등록 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1327,7 +1437,13 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
       const response = await fetch("/api/rankings?limit=20");
       if (response.ok) {
         const data = await response.json();
-        setRankings(data);
+        
+        // Check if rankings have changed
+        const hasChanged = JSON.stringify(data) !== JSON.stringify(previousRankingsRef.current);
+        if (hasChanged) {
+          previousRankingsRef.current = data;
+          setRankings(data);
+        }
       } else {
         const errorText = await response.text();
         console.error("Failed to fetch rankings:", response.status, errorText);
@@ -1339,6 +1455,13 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
 
   useEffect(() => {
     fetchRankings();
+    
+    // 실시간 랭킹 업데이트 (2초마다)
+    const interval = setInterval(() => {
+      fetchRankings();
+    }, 2000);
+    
+    return () => clearInterval(interval);
   }, [fetchRankings]);
 
   const getRankIcon = (rank: number) => {
@@ -1434,7 +1557,11 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
               랭킹
             </DialogTitle>
           </DialogHeader>
-          <RankingsDisplay rankings={rankings} getRankIcon={getRankIcon} />
+                    <RankingsDisplay 
+                      rankings={rankings} 
+                      getRankIcon={getRankIcon}
+                      previousRankings={previousRankingsRef.current}
+                    />
         </DialogContent>
       </Dialog>
     </>
@@ -1507,19 +1634,6 @@ export default function InvestmentGame() {
     }
   };
 
-  // Developer shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+Shift+R: Clear rankings
-      if (e.ctrlKey && e.shiftKey && e.key === "R") {
-        e.preventDefault();
-        clearRankings();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 font-sans selection:bg-blue-500/30 selection:text-blue-200">

@@ -63,6 +63,10 @@ export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private rankings: Map<string, Ranking>;
   private rankingsLoaded: boolean = false;
+  private saveTimeout: NodeJS.Timeout | null = null;
+  private isSaving: boolean = false;
+  private readonly SAVE_DEBOUNCE_MS = 2000; // 2초 디바운싱 (여러 요청이 와도 2초 후 한 번만 저장)
+  private operationQueue: Promise<void> = Promise.resolve(); // 동시성 제어를 위한 큐
 
   constructor() {
     this.users = new Map();
@@ -91,6 +95,33 @@ export class MemStorage implements IStorage {
     }
   }
 
+  private scheduleSave() {
+    // 기존 타이머가 있으면 취소
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+
+    // 새로운 타이머 설정 (2초 후 저장)
+    this.saveTimeout = setTimeout(async () => {
+      if (this.isSaving) {
+        // 이미 저장 중이면 다시 스케줄링
+        this.scheduleSave();
+        return;
+      }
+
+      this.isSaving = true;
+      try {
+        const rankings = Array.from(this.rankings.values());
+        await saveRankings(rankings);
+      } catch (err) {
+        console.error("[Storage] Background save failed (ranking still in memory):", err);
+      } finally {
+        this.isSaving = false;
+        this.saveTimeout = null;
+      }
+    }, this.SAVE_DEBOUNCE_MS);
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
@@ -109,6 +140,15 @@ export class MemStorage implements IStorage {
   }
 
   async createRanking(insertRanking: InsertRanking): Promise<Ranking> {
+    // 동시성 제어: 이전 작업이 완료될 때까지 대기
+    await this.operationQueue;
+    
+    // 새로운 작업을 큐에 추가
+    let resolveQueue: () => void;
+    this.operationQueue = new Promise((resolve) => {
+      resolveQueue = resolve;
+    });
+
     try {
       await this.waitForRankingsLoaded();
       const id = randomUUID();
@@ -130,13 +170,17 @@ export class MemStorage implements IStorage {
         console.log(`[Storage] Limited rankings to top 1000`);
       }
       
-      // Save to file (non-blocking - don't fail if file save fails)
-      saveRankings(Array.from(this.rankings.values())).catch(err => {
-        console.error("[Storage] Background save failed (ranking still in memory):", err);
-      });
+      // Debounced save to file (여러 요청이 와도 마지막 요청 후 2초 후에만 저장)
+      // 이렇게 하면 2분 간격으로 들어오는 요청들도 효율적으로 처리 가능
+      this.scheduleSave();
+      
+      // 큐 해제
+      resolveQueue!();
       
       return ranking;
     } catch (error) {
+      // 에러 발생 시에도 큐 해제
+      resolveQueue!();
       console.error("[Storage] Failed to create ranking:", error);
       throw error;
     }
@@ -152,8 +196,13 @@ export class MemStorage implements IStorage {
 
   async clearRankings(): Promise<void> {
     await this.waitForRankingsLoaded();
+    // 기존 저장 타이머 취소
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+    }
     this.rankings.clear();
-    // Save empty array to file
+    // 즉시 저장 (명시적 삭제이므로)
     await saveRankings([]);
   }
 }

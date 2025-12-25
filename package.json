@@ -12,7 +12,11 @@
     "start:win": "set NODE_ENV=production&& node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "verify-deployment": "npx tsx script/verify-deployment.ts"
+    "verify-deployment": "npx tsx script/verify-deployment.ts",
+    "load-test": "npx tsx script/load-test.ts",
+    "test:200": "npx tsx script/auto-load-test.ts",
+    "test:real": "npx tsx script/real-game-simulation.ts",
+    "test:real:render": "API_URL=https://tsts-pmof.onrender.com npx tsx script/real-game-simulation.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -54,6 +58,7 @@
     "drizzle-zod": "^0.7.0",
     "embla-carousel-react": "^8.6.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.2.1",
     "express-session": "^1.18.1",
     "framer-motion": "^12.23.24",
     "input-otp": "^1.4.2",
