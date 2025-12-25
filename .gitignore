@@ -6,4 +6,5 @@ vite.config.ts.*
 *.tar.gz
 *.zip
 .data
+!.data/rankings.json
 .local
