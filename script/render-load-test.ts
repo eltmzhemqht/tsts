@@ -160,6 +160,8 @@ async function runBatch(batchNumber: number, batchSize: number): Promise<void> {
 async function main() {
   console.log("🚀 Render 배포 사이트 로드 테스트 시작...");
   console.log(`📊 총 ${TOTAL_BOTS}개 봇, 배치 크기: ${CONCURRENT_BATCH_SIZE}\n`);
+  console.log("⚠️  주의: 이 스크립트는 한 번만 실행되고 종료됩니다.");
+  console.log("   자동으로 반복 실행되지 않습니다.\n");
   
   const startTime = Date.now();
   const totalBatches = Math.ceil(TOTAL_BOTS / CONCURRENT_BATCH_SIZE);
@@ -177,7 +179,12 @@ async function main() {
   console.log(`\n✨ 로드 테스트 완료!`);
   console.log(`⏱️  소요 시간: ${duration}초`);
   console.log(`📊 확인: ${RENDER_URL}/api/rankings`);
+  console.log(`\n✅ 스크립트가 종료되었습니다. 더 이상 봇이 생성되지 않습니다.`);
+  process.exit(0); // 명시적으로 종료
 }
 
-main().catch(console.error);
+main().catch((error) => {
+  console.error("❌ 오류 발생:", error);
+  process.exit(1);
+});
 

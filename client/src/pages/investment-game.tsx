@@ -1027,10 +1027,22 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   const lastNewsTextRef = useRef<string | null>(null);
   const isGameEndedRef = useRef(false); // Prevent multiple game end calls
 
-  // Keep timeLeftRef in sync with timeLeft
+  // Keep refs in sync with state
   useEffect(() => {
     timeLeftRef.current = timeLeft;
   }, [timeLeft]);
+  
+  useEffect(() => {
+    cashRef.current = cash;
+  }, [cash]);
+  
+  useEffect(() => {
+    holdingsRef.current = holdings;
+  }, [holdings]);
+  
+  useEffect(() => {
+    currentPriceRef.current = currentPrice;
+  }, [currentPrice]);
 
   const triggerNews = useCallback(() => {
     // Don't trigger news if game has ended
@@ -1108,11 +1120,22 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
           // 게임 종료 처리: ref를 사용하여 최신 값으로 계산
           if (!isGameEndedRef.current) {
             isGameEndedRef.current = true;
-            const finalValue = Math.max(0, cashRef.current + (holdingsRef.current * currentPriceRef.current));
-            // 다음 틱에서 onEnd 호출 (상태 업데이트 후)
+            // ref가 최신 값으로 동기화되도록 약간의 지연 후 계산
+            // currentPriceRef는 currentPrice 상태와 동기화되어 있으므로 최신 값 사용
             setTimeout(() => {
+              const finalCash = cashRef.current;
+              const finalHoldings = holdingsRef.current;
+              const finalPrice = currentPriceRef.current;
+              const finalValue = Math.max(0, finalCash + (finalHoldings * finalPrice));
+              console.log("Game ended - Final calculation:", { 
+                cash: finalCash, 
+                holdings: finalHoldings, 
+                price: finalPrice, 
+                finalValue,
+                calculation: `${finalCash} + (${finalHoldings} * ${finalPrice}) = ${finalValue}`
+              });
               onEnd(finalValue);
-            }, 0);
+            }, 100); // 100ms 지연으로 ref 동기화 보장
           }
           return 0;
         }
@@ -1156,10 +1179,17 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   useEffect(() => {
     if (timeLeft === 0 && !isGameEndedRef.current) {
       isGameEndedRef.current = true; // Prevent multiple calls
-      const finalValue = Math.max(0, cashRef.current + (holdingsRef.current * currentPriceRef.current)); // Ensure non-negative
+      // 상태를 직접 사용하여 최신 값으로 계산
+      const finalValue = Math.max(0, cash + (holdings * currentPrice));
+      console.log("Game ended (useEffect) - Final calculation:", { 
+        cash, 
+        holdings, 
+        price: currentPrice, 
+        finalValue 
+      });
       onEnd(finalValue);
     }
-  }, [timeLeft, onEnd]);
+  }, [timeLeft, cash, holdings, currentPrice, onEnd]);
 
   const handleBuy = useCallback(() => {
     if (isGameEndedRef.current || currentPrice <= 0 || cash < currentPrice) return; 
