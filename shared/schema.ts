@@ -23,7 +23,7 @@ export interface Ranking {
   name: string;
   returnRate: number;
   finalValue: number;
-  createdAt: Date;
+  createdAt: number; // timestamp (number) for stable serialization
 }
 
 export interface InsertRanking {

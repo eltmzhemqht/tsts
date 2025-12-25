@@ -15,15 +15,15 @@ export async function registerRoutes(
   // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
 
   // Rate limiting for ranking API
-  // 7대 노트북 × 2분 간격 = 최대 분당 7회
-  // 학교 행사용으로 충분히 여유있게 설정 (분당 1000회)
-  // 개발 모드에서는 완전히 비활성화
+  // 학교 축제 환경: 7대 노트북 × 2분 게임 = 최대 분당 3.5회
+  // 여유있게 30회/분으로 설정 (약 8.5배 여유)
+  // Render 무료 플랜: 과도한 요청 시 서버 재시작 위험 방지
   const isDevelopment = process.env.NODE_ENV === "development";
   const disableRateLimit = process.env.DISABLE_RATE_LIMIT === "true" || isDevelopment;
   
   // Rate limiting 미들웨어
   // 개발 모드: 완전히 비활성화
-  // 프로덕션: 분당 1000회 (학교 행사용으로 충분)
+  // 프로덕션: 분당 30회 (학교 축제 환경에 맞춤)
   const rankingLimiter = disableRateLimit
     ? (req: any, res: any, next: any) => {
         // Rate limiting 완전히 비활성화 - 모든 요청 허용
@@ -31,10 +31,13 @@ export async function registerRoutes(
       }
     : rateLimit({
         windowMs: 60 * 1000, // 1분
-        max: 1000, // 프로덕션: 분당 1000회 (학교 행사용으로 충분)
-        message: { message: "너무 많은 요청입니다. 잠시 후 다시 시도해주세요." },
+        max: 30, // 프로덕션: 분당 30회 (학교 축제 환경)
+        message: { success: false, message: "너무 많은 요청입니다. 잠시 후 다시 시도해주세요." },
         standardHeaders: true,
         legacyHeaders: false,
+        handler: (req, res) => {
+          res.status(200).json({ success: false, message: "너무 많은 요청입니다. 잠시 후 다시 시도해주세요." });
+        },
       });
 
   // Ranking API
@@ -42,40 +45,43 @@ export async function registerRoutes(
     const startTime = Date.now();
     try {
       const { name, returnRate, finalValue } = req.body as InsertRanking;
-      console.log(`[API] POST /api/rankings - Received:`, { name, returnRate, finalValue });
+      // 프로덕션에서는 상세 로깅 최소화 (성능 최적화)
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[API] POST /api/rankings - Received:`, { name, returnRate, finalValue });
+      }
       
       // Validate input
       if (!name || name.trim().length === 0) {
         console.error("[API] POST /api/rankings - Missing or empty name");
-        return res.status(400).json({ message: "Name is required" });
+        return res.status(200).json({ success: false, message: "Name is required" });
       }
 
       if (typeof returnRate !== "number" || isNaN(returnRate)) {
         console.error("[API] POST /api/rankings - Invalid returnRate:", returnRate);
-        return res.status(400).json({ message: "Invalid returnRate" });
+        return res.status(200).json({ success: false, message: "Invalid returnRate" });
       }
 
       if (typeof finalValue !== "number" || isNaN(finalValue)) {
         console.error("[API] POST /api/rankings - Invalid finalValue:", finalValue);
-        return res.status(400).json({ message: "Invalid finalValue" });
+        return res.status(200).json({ success: false, message: "Invalid finalValue" });
       }
 
       // Validate name length (max 10 characters for school festival) - check after trim
       const trimmedName = name.trim();
       if (trimmedName.length > 10) {
         console.error("[API] POST /api/rankings - Name too long:", trimmedName.length);
-        return res.status(400).json({ message: "Name must be 1-10 characters" });
+        return res.status(200).json({ success: false, message: "Name must be 1-10 characters" });
       }
       
       // Validate returnRate and finalValue ranges
       if (!isFinite(returnRate) || returnRate < -100 || returnRate > 10000) {
         console.error("[API] POST /api/rankings - Invalid returnRate range:", returnRate);
-        return res.status(400).json({ message: "Invalid returnRate range" });
+        return res.status(200).json({ success: false, message: "Invalid returnRate range" });
       }
       
       if (!isFinite(finalValue) || finalValue < 0 || finalValue > 100000000000) {
         console.error("[API] POST /api/rankings - Invalid finalValue range:", finalValue);
-        return res.status(400).json({ message: "Invalid finalValue range" });
+        return res.status(200).json({ success: false, message: "Invalid finalValue range" });
       }
 
       const ranking = await storage.createRanking({
@@ -85,13 +91,15 @@ export async function registerRoutes(
       });
 
       const duration = Date.now() - startTime;
-      console.log(`[API] POST /api/rankings - Successfully created ranking: ${ranking.id} (${duration}ms)`);
-      res.json(ranking);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[API] POST /api/rankings - Successfully created ranking: ${ranking.id} (${duration}ms)`);
+      }
+      res.status(200).json({ success: true, data: ranking });
     } catch (error: any) {
       const duration = Date.now() - startTime;
       console.error(`[API] POST /api/rankings - Error after ${duration}ms:`, error);
       const errorMessage = error?.message || "Failed to create ranking";
-      res.status(500).json({ message: errorMessage });
+      res.status(200).json({ success: false, message: errorMessage });
     }
   });
 
@@ -99,9 +107,12 @@ export async function registerRoutes(
   const getRankingLimiter = rateLimit({
     windowMs: 60 * 1000, // 1분
     max: 60, // 분당 최대 60회 요청
-    message: { message: "너무 많은 요청입니다. 잠시 후 다시 시도해주세요." },
+    message: { success: false, message: "너무 많은 요청입니다. 잠시 후 다시 시도해주세요." },
     standardHeaders: true,
     legacyHeaders: false,
+    handler: (req, res) => {
+      res.status(200).json({ success: false, message: "너무 많은 요청입니다. 잠시 후 다시 시도해주세요." });
+    },
   });
 
   app.get("/api/rankings", getRankingLimiter, async (req, res) => {
@@ -116,23 +127,34 @@ export async function registerRoutes(
         }
       }
       const rankings = await storage.getRankings(limit);
-      const duration = Date.now() - startTime;
-      console.log(`[API] GET /api/rankings - Returning ${rankings.length} rankings (${duration}ms)`);
-      res.json(rankings);
+      res.status(200).json({ success: true, data: rankings });
     } catch (error) {
       const duration = Date.now() - startTime;
       console.error(`[API] GET /api/rankings - Error after ${duration}ms:`, error);
-      res.status(500).json({ message: "Failed to get rankings" });
+      res.status(200).json({ success: false, message: "Failed to get rankings" });
     }
   });
 
-  // Developer: Clear rankings (Ctrl+Shift+R)
+  // Developer: Clear rankings (보호됨)
+  // 환경 변수 CLEAR_RANKINGS_KEY와 query key 일치해야 함
   app.delete("/api/rankings", async (req, res) => {
     try {
+      const requiredKey = process.env.CLEAR_RANKINGS_KEY || "default-secret-key-change-in-production";
+      const providedKey = req.query.key as string;
+      
+      if (!providedKey || providedKey !== requiredKey) {
+        console.error("[API] DELETE /api/rankings - Unauthorized: Invalid or missing key");
+        return res.status(200).json({ success: false, message: "Unauthorized" });
+      }
+      
       await storage.clearRankings();
-      res.json({ message: "Rankings cleared" });
+      if (process.env.NODE_ENV === "development") {
+        console.log("[API] DELETE /api/rankings - Rankings cleared successfully");
+      }
+      res.status(200).json({ success: true, message: "Rankings cleared" });
     } catch (error) {
-      res.status(500).json({ message: "Failed to clear rankings" });
+      console.error("[API] DELETE /api/rankings - Error:", error);
+      res.status(200).json({ success: false, message: "Failed to clear rankings" });
     }
   });
 

@@ -47,6 +47,11 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
+      // GET /api/rankings 요청은 로깅 제외 (실시간 업데이트로 인한 빈번한 요청)
+      if (req.method === "GET" && path === "/api/rankings") {
+        return;
+      }
+      
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;

@@ -35,10 +35,14 @@ async function loadRankings(): Promise<Ranking[]> {
   try {
     const data = await readFile(RANKINGS_FILE, "utf-8");
     const rankings = JSON.parse(data);
-    // Convert createdAt strings back to Date objects
+    // Convert createdAt to number (timestamp) - handle both Date strings and numbers
     return rankings.map((r: any) => ({
       ...r,
-      createdAt: new Date(r.createdAt),
+      createdAt: typeof r.createdAt === 'number' 
+        ? r.createdAt 
+        : (typeof r.createdAt === 'string' 
+          ? new Date(r.createdAt).getTime() 
+          : Date.now()),
     }));
   } catch (error) {
     console.error("Failed to load rankings:", error);
@@ -51,7 +55,9 @@ async function saveRankings(rankings: Ranking[]): Promise<void> {
     await ensureDataDir();
     const data = JSON.stringify(rankings, null, 2);
     await writeFile(RANKINGS_FILE, data, "utf-8");
-    console.log(`[Storage] Saved ${rankings.length} rankings to file`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Storage] Saved ${rankings.length} rankings to file`);
+    }
   } catch (error) {
     console.error("[Storage] Failed to save rankings:", error);
     // Don't throw - allow ranking to be created even if file save fails
@@ -82,7 +88,9 @@ export class MemStorage implements IStorage {
         this.rankings.set(ranking.id, ranking);
       });
       this.rankingsLoaded = true;
-      console.log(`Loaded ${rankings.length} rankings from file`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`Loaded ${rankings.length} rankings from file`);
+      }
     } catch (error) {
       console.error("Failed to load rankings from file:", error);
       this.rankingsLoaded = true; // Mark as loaded even if failed to prevent infinite retries
@@ -144,7 +152,7 @@ export class MemStorage implements IStorage {
     await this.operationQueue;
     
     // 새로운 작업을 큐에 추가
-    let resolveQueue: () => void;
+    let resolveQueue: (() => void) | undefined;
     this.operationQueue = new Promise((resolve) => {
       resolveQueue = resolve;
     });
@@ -155,10 +163,12 @@ export class MemStorage implements IStorage {
       const ranking: Ranking = {
         ...insertRanking,
         id,
-        createdAt: new Date(),
+        createdAt: Date.now(), // timestamp (number) for stable serialization
       };
       this.rankings.set(id, ranking);
-      console.log(`[Storage] Created ranking: ${id} for ${insertRanking.name} (${insertRanking.returnRate.toFixed(2)}%)`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[Storage] Created ranking: ${id} for ${insertRanking.name} (${insertRanking.returnRate.toFixed(2)}%)`);
+      }
       
       // Limit rankings to last 1000 entries to prevent memory issues during long sessions
       const allRankings = Array.from(this.rankings.values());
@@ -167,20 +177,26 @@ export class MemStorage implements IStorage {
         const sorted = allRankings.sort((a, b) => b.returnRate - a.returnRate).slice(0, 1000);
         this.rankings.clear();
         sorted.forEach(r => this.rankings.set(r.id, r));
-        console.log(`[Storage] Limited rankings to top 1000`);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[Storage] Limited rankings to top 1000`);
+        }
       }
       
       // Debounced save to file (여러 요청이 와도 마지막 요청 후 2초 후에만 저장)
       // 이렇게 하면 2분 간격으로 들어오는 요청들도 효율적으로 처리 가능
       this.scheduleSave();
       
-      // 큐 해제
-      resolveQueue!();
+      // 큐 해제 (안전성 체크)
+      if (resolveQueue) {
+        resolveQueue();
+      }
       
       return ranking;
     } catch (error) {
-      // 에러 발생 시에도 큐 해제
-      resolveQueue!();
+      // 에러 발생 시에도 큐 해제 (안전성 체크)
+      if (resolveQueue) {
+        resolveQueue();
+      }
       console.error("[Storage] Failed to create ranking:", error);
       throw error;
     }
@@ -189,8 +205,16 @@ export class MemStorage implements IStorage {
   async getRankings(limit: number = 20): Promise<Ranking[]> {
     await this.waitForRankingsLoaded();
     const validLimit = Math.max(1, Math.min(100, limit)); // Clamp between 1 and 100
-    return Array.from(this.rankings.values())
-      .sort((a, b) => b.returnRate - a.returnRate) // Sort by return rate descending
+    
+    // 최적화: 랭킹이 적을 때는 전체 정렬, 많을 때는 부분 정렬
+    const allRankings = Array.from(this.rankings.values());
+    if (allRankings.length <= validLimit) {
+      return allRankings.sort((a, b) => b.returnRate - a.returnRate);
+    }
+    
+    // 많은 경우: 부분 정렬로 성능 최적화
+    return allRankings
+      .sort((a, b) => b.returnRate - a.returnRate)
       .slice(0, validLimit);
   }
 

@@ -402,36 +402,56 @@ const TutorialOverlay = ({
       return;
     }
     
-    const element = document.querySelector(stepTarget) as HTMLElement;
+    let scrollTimeout: NodeJS.Timeout | null = null;
+    let rafId: number | null = null;
+    let element: HTMLElement | null = null;
+    let originalStyle = '';
+    
+    // requestAnimationFrame으로 DOM 조작 최적화
+    rafId = requestAnimationFrame(() => {
+      element = document.querySelector(stepTarget) as HTMLElement;
       if (element) {
         // Get initial rect immediately to avoid jumping
         const initialRect = element.getBoundingClientRect();
         setHighlightRect(initialRect);
         
         // Increase brightness of the element itself
-        const originalStyle = element.style.cssText;
+        originalStyle = element.style.cssText;
         element.style.cssText += `
           filter: brightness(1.5) contrast(1.1);
           transition: filter 0.3s ease;
         `;
         
-        // Scroll into view
+        // Scroll into view (passive로 최적화)
         element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         
-        // Update rect after scroll completes
-        const scrollTimeout = setTimeout(() => {
-          const rect = element.getBoundingClientRect();
-          setHighlightRect(rect);
+        // Update rect after scroll completes (requestAnimationFrame 사용)
+        scrollTimeout = setTimeout(() => {
+          const updateRafId = requestAnimationFrame(() => {
+            if (element) {
+              const rect = element.getBoundingClientRect();
+              setHighlightRect(rect);
+            }
+          });
+          return updateRafId;
         }, 400);
-        
-        // Cleanup function
-        return () => {
-          clearTimeout(scrollTimeout);
-          element.style.cssText = originalStyle;
-        };
       } else {
         setHighlightRect(null);
       }
+    });
+    
+    // Cleanup function
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      if (scrollTimeout) {
+        clearTimeout(scrollTimeout);
+      }
+      if (element && originalStyle) {
+        element.style.cssText = originalStyle;
+      }
+    };
   }, [currentStep, stepTarget]);
 
   return (
@@ -671,7 +691,7 @@ const AssetSelection = ({
 };
 
 // Ranking Display Component (reusable)
-const RankingsDisplay = memo(({ rankings, getRankIcon, previousRankings = [] }: { rankings: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>, getRankIcon: (rank: number) => React.ReactNode, previousRankings?: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }> }) => {
+const RankingsDisplay = memo(({ rankings, getRankIcon, previousRankings = [] }: { rankings: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: number }>, getRankIcon: (rank: number) => React.ReactNode, previousRankings?: Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: number }> }) => {
   return (
     <div className="space-y-2 mt-4">
       {rankings.length === 0 ? (
@@ -735,24 +755,33 @@ const RankingsDisplay = memo(({ rankings, getRankIcon, previousRankings = [] }: 
 });
 
 const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asset: AssetType) => void, onTutorial: () => void, onStartWithTutorial: () => void }) => {
-  const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
-  const previousRankingsRef = useRef<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
+  const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: number }>>([]);
+  const previousRankingsRef = useRef<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: number }>>([]);
 
   const fetchRankings = useCallback(async () => {
     try {
       const response = await fetch("/api/rankings?limit=20");
-      if (response.ok) {
-        const data = await response.json();
+      const result = await response.json();
+      
+      if (result.success) {
+        // result.data가 없거나 빈 배열인 경우도 처리
+        const newData = result.data || [];
+        const prevData = previousRankingsRef.current;
         
-        // Check if rankings have changed
-        const hasChanged = JSON.stringify(data) !== JSON.stringify(previousRankingsRef.current);
+        // 길이가 다르면 무조건 변경됨 (초기화 포함)
+        const hasChanged = 
+          newData.length !== prevData.length ||
+          // 길이가 같고 둘 다 0보다 크면 첫/마지막 ID 비교
+          (newData.length > 0 && prevData.length > 0 && 
+           (newData[0]?.id !== prevData[0]?.id || 
+            newData[newData.length - 1]?.id !== prevData[prevData.length - 1]?.id));
+        
         if (hasChanged) {
-          previousRankingsRef.current = data;
-          setRankings(data);
+          previousRankingsRef.current = newData;
+          setRankings(newData);
         }
       } else {
-        const errorText = await response.text();
-        console.error("Failed to fetch rankings:", response.status, errorText);
+        console.error("Failed to fetch rankings:", result.message || "Unknown error");
       }
     } catch (error) {
       console.error("Failed to fetch rankings:", error);
@@ -765,14 +794,28 @@ const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asse
     }
     
     try {
-      const response = await fetch("/api/rankings", {
+      // 개발 환경에서는 키 없이, 프로덕션에서는 키 입력
+      const key = process.env.NODE_ENV === "development" 
+        ? "default-secret-key-change-in-production"
+        : prompt("랭킹 초기화를 위해 키를 입력하세요:");
+      
+      if (!key) {
+        return;
+      }
+      
+      const response = await fetch(`/api/rankings?key=${encodeURIComponent(key)}`, {
         method: "DELETE",
       });
-      if (response.ok) {
+      const result = await response.json();
+      
+      if (result.success) {
+        // 초기화 성공 시 즉시 빈 배열로 업데이트 (UI 즉시 반영)
+        previousRankingsRef.current = [];
+        setRankings([]);
         alert("랭킹이 초기화되었습니다.");
-        await fetchRankings(); // 랭킹 목록 새로고침
+        await fetchRankings(); // 서버에서 확인하여 랭킹 목록 새로고침
       } else {
-        alert("랭킹 초기화에 실패했습니다.");
+        alert(`랭킹 초기화 실패: ${result.message || "알 수 없는 오류"}`);
       }
     } catch (error) {
       console.error("Failed to clear rankings:", error);
@@ -1025,11 +1068,13 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
       currentPriceRef.current = newPrice;
       setCurrentPrice(newPrice);
 
-      // Update Chart History ONLY when price changes
-      setPriceHistory(prev => {
-        const newHistory = [...prev, { time: prev.length, price: newPrice }];
-        // Limit history to last 50 points for performance
-        return newHistory.slice(-50); 
+      // Update Chart History ONLY when price changes (최적화: requestAnimationFrame 사용)
+      requestAnimationFrame(() => {
+        setPriceHistory(prev => {
+          const newHistory = [...prev, { time: prev.length, price: newPrice }];
+          // Limit history to last 50 points for performance
+          return newHistory.slice(-50); 
+        });
       });
       
       // Remove this timeout from tracking array
@@ -1075,7 +1120,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
       newsIntervalRef.current = setTimeout(() => {
         const currentTime = timeLeftRef.current;
         if (currentTime > 5 && !isGameEndedRef.current) {
-          triggerNews();
+        triggerNews();
           scheduleNextNews(); // Only schedule if time remains
         }
       }, nextNewsTime);
@@ -1220,7 +1265,10 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
             </CardHeader>
             <CardContent className="flex-1 p-4 min-h-0">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={priceHistory}>
+                <AreaChart 
+                  data={priceHistory}
+                  margin={{ top: 5, right: 5, left: 5, bottom: 5 }}
+                >
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={assetConfig.id === 'coin' ? '#eab308' : assetConfig.id === 'real_estate' ? '#22c55e' : '#3b82f6'} stopOpacity={0.3}/>
@@ -1233,8 +1281,6 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
                     hide={true} 
                     width={0}
                   />
-                  {/* Changed back to 'monotone' or 'linear' for a more standard chart look, 
-                      'stepAfter' was creating confusion. 'linear' is best for accurate point-to-point representation. */}
                   <Area 
                     type="linear" 
                     dataKey="price" 
@@ -1243,6 +1289,9 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
                     fillOpacity={1} 
                     fill="url(#colorPrice)" 
                     isAnimationActive={false}
+                    animationDuration={0}
+                    dot={false}
+                    activeDot={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -1380,9 +1429,9 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
   const [playerName, setPlayerName] = useState("");
   const [isRankingSubmitted, setIsRankingSubmitted] = useState(false);
   const [showRankings, setShowRankings] = useState(false);
-  const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
+  const [rankings, setRankings] = useState<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: number }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const previousRankingsRef = useRef<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: string }>>([]);
+  const previousRankingsRef = useRef<Array<{ id: string; name: string; returnRate: number; finalValue: number; createdAt: number }>>([]);
 
   let message = "";
   if (returnRate > 50) message = "투자천재의 탄생! 워렌 버핏이 형님이라 부르겠네요.";
@@ -1407,21 +1456,14 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
         }),
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Ranking submitted successfully:", data);
+      const result = await response.json();
+      
+      if (result.success && result.data) {
         setIsRankingSubmitted(true);
         await fetchRankings(); // Refresh rankings
       } else {
-        let errorMessage = "알 수 없는 오류";
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-        } catch {
-          const errorText = await response.text();
-          errorMessage = errorText || errorMessage;
-        }
-        console.error("Failed to submit ranking:", response.status, errorMessage);
+        const errorMessage = result.message || "알 수 없는 오류";
+        console.error("Failed to submit ranking:", errorMessage);
         alert(`랭킹 등록 실패: ${errorMessage}`);
       }
     } catch (error) {
@@ -1435,18 +1477,27 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
   const fetchRankings = useCallback(async () => {
     try {
       const response = await fetch("/api/rankings?limit=20");
-      if (response.ok) {
-        const data = await response.json();
+      const result = await response.json();
+      
+      if (result.success) {
+        // result.data가 없거나 빈 배열인 경우도 처리
+        const newData = result.data || [];
+        const prevData = previousRankingsRef.current;
         
-        // Check if rankings have changed
-        const hasChanged = JSON.stringify(data) !== JSON.stringify(previousRankingsRef.current);
+        // 길이가 다르면 무조건 변경됨 (초기화 포함)
+        const hasChanged = 
+          newData.length !== prevData.length ||
+          // 길이가 같고 둘 다 0보다 크면 첫/마지막 ID 비교
+          (newData.length > 0 && prevData.length > 0 && 
+           (newData[0]?.id !== prevData[0]?.id || 
+            newData[newData.length - 1]?.id !== prevData[prevData.length - 1]?.id));
+        
         if (hasChanged) {
-          previousRankingsRef.current = data;
-          setRankings(data);
+          previousRankingsRef.current = newData;
+          setRankings(newData);
         }
       } else {
-        const errorText = await response.text();
-        console.error("Failed to fetch rankings:", response.status, errorText);
+        console.error("Failed to fetch rankings:", result.message || "Unknown error");
       }
     } catch (error) {
       console.error("Failed to fetch rankings:", error);
@@ -1623,14 +1674,28 @@ export default function InvestmentGame() {
 
   const clearRankings = async () => {
     try {
-      const response = await fetch("/api/rankings", {
+      // 개발 환경에서는 키 없이, 프로덕션에서는 키 입력
+      const key = process.env.NODE_ENV === "development" 
+        ? "default-secret-key-change-in-production"
+        : prompt("랭킹 초기화를 위해 키를 입력하세요:");
+      
+      if (!key) {
+        return;
+      }
+      
+      const response = await fetch(`/api/rankings?key=${encodeURIComponent(key)}`, {
         method: "DELETE",
       });
-      if (response.ok) {
+      const result = await response.json();
+      
+      if (result.success) {
         alert("랭킹이 초기화되었습니다.");
+      } else {
+        alert(`랭킹 초기화 실패: ${result.message || "알 수 없는 오류"}`);
       }
     } catch (error) {
       console.error("Failed to clear rankings:", error);
+      alert("랭킹 초기화 중 오류가 발생했습니다.");
     }
   };
 
