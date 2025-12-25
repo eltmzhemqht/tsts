@@ -19,6 +19,10 @@ const GAME_DURATION = 120; // 게임 시간 2분 (초)
 const FESTIVAL_DURATION = 4 * 60 * 60; // 축제 시간 4시간 (초)
 const SIMULATION_SPEED = 60; // 시뮬레이션 속도 (60배 = 2분 게임을 2초로)
 
+// 빠른 테스트를 위한 설정 (환경 변수로 제어)
+const QUICK_TEST = process.env.QUICK_TEST === "true";
+const QUICK_TEST_GAMES = 10; // 빠른 테스트: 노트북당 10게임만
+
 // Rate limiting 고려
 const POST_RATE_LIMIT = 30; // 분당 30회
 const POST_INTERVAL_MS = (60 * 1000) / POST_RATE_LIMIT; // 요청 간 최소 간격 (2초)
@@ -117,8 +121,10 @@ async function simulateGame(gameId: number): Promise<{ name: string; returnRate:
       state.averageBuyPrice = 0;
     }
 
-    // 시뮬레이션 딜레이 (실제 시간 압축)
-    await sleep(100); // 100ms = 실제 1초
+    // 빠른 테스트 모드에서는 딜레이 제거
+    if (!QUICK_TEST) {
+      await sleep(100); // 100ms = 실제 1초
+    }
   }
 
   // 최종 자산 계산
@@ -181,8 +187,10 @@ async function runLaptop(laptopNumber: number): Promise<void> {
   console.log(`\n💻 노트북 ${laptopNumber} 시작`);
   
   // 실제로는 2분마다 게임이 실행되지만, 시뮬레이션에서는 더 빠르게
-  // 4시간 = 240분, 2분 간격 = 120게임
-  const totalGames = Math.floor(FESTIVAL_DURATION / GAME_DURATION); // 4시간 동안 총 게임 수 (120게임)
+  // 빠른 테스트 모드: 노트북당 10게임만, 전체 테스트: 4시간 동안 120게임
+  const totalGames = QUICK_TEST 
+    ? QUICK_TEST_GAMES 
+    : Math.floor(FESTIVAL_DURATION / GAME_DURATION); // 4시간 동안 총 게임 수 (120게임)
   
   let gameId = (laptopNumber - 1) * 1000 + 1; // 노트북별 고유 게임 ID
   let successCount = 0;
@@ -202,9 +210,15 @@ async function runLaptop(laptopNumber: number): Promise<void> {
     gameId++;
     
     // 다음 게임까지 대기 (Rate limiting 고려)
-    // 실제로는 2분 간격이지만, 시뮬레이션에서는 더 빠르게
-    const nextGameDelay = (GAME_DURATION * 1000) / SIMULATION_SPEED;
-    await sleep(nextGameDelay);
+    // 빠른 테스트 모드: 최소 간격만, 전체 테스트: 시뮬레이션 속도 고려
+    if (QUICK_TEST) {
+      // 빠른 테스트: Rate limit만 고려 (2초)
+      await sleep(POST_INTERVAL_MS);
+    } else {
+      // 전체 테스트: 실제 시간 압축
+      const nextGameDelay = (GAME_DURATION * 1000) / SIMULATION_SPEED;
+      await sleep(nextGameDelay);
+    }
   }
   
   console.log(`✅ 노트북 ${laptopNumber} 완료: 성공 ${successCount}/${totalGames}, 실패 ${failCount}`);
@@ -213,7 +227,11 @@ async function runLaptop(laptopNumber: number): Promise<void> {
 // 메인 함수
 async function main() {
   console.log("🎮 학교 축제 실제 상황 시뮬레이션 시작...");
-  console.log(`📊 노트북 ${NUM_LAPTOPS}대, 게임 시간 ${GAME_DURATION}초, 축제 시간 ${FESTIVAL_DURATION / 60}분`);
+  if (QUICK_TEST) {
+    console.log(`⚡ 빠른 테스트 모드: 노트북당 ${QUICK_TEST_GAMES}게임만 실행`);
+  } else {
+    console.log(`📊 전체 시뮬레이션: 노트북 ${NUM_LAPTOPS}대, 게임 시간 ${GAME_DURATION}초, 축제 시간 ${FESTIVAL_DURATION / 60}분`);
+  }
   console.log(`🌐 API URL: ${API_BASE_URL}`);
   console.log(`⚡ 시뮬레이션 속도: ${SIMULATION_SPEED}배 (2분 게임을 ${(GAME_DURATION / SIMULATION_SPEED).toFixed(1)}초로)`);
   console.log(`🚦 Rate Limit: ${POST_RATE_LIMIT}회/분 (요청 간 최소 간격: ${POST_INTERVAL_MS}ms)\n`);

@@ -13,7 +13,9 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "test:festival": "npx tsx script/festival-simulation.ts",
-    "test:festival:render": "set API_URL=https://tsts-pmof.onrender.com&& npx tsx script/festival-simulation.ts"
+    "test:festival:render": "set API_URL=https://tsts-pmof.onrender.com&& npx tsx script/festival-simulation.ts",
+    "test:quick": "set QUICK_TEST=true&& npx tsx script/festival-simulation.ts",
+    "test:quick:render": "set QUICK_TEST=true&& set API_URL=https://tsts-pmof.onrender.com&& npx tsx script/festival-simulation.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
