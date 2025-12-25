@@ -1117,26 +1117,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
         // Normal game: countdown normally
         if (prev <= 1) {
           clearInterval(timerInterval);
-          // 게임 종료 처리: ref를 사용하여 최신 값으로 계산
-          if (!isGameEndedRef.current) {
-            isGameEndedRef.current = true;
-            // ref가 최신 값으로 동기화되도록 약간의 지연 후 계산
-            // currentPriceRef는 currentPrice 상태와 동기화되어 있으므로 최신 값 사용
-            setTimeout(() => {
-              const finalCash = cashRef.current;
-              const finalHoldings = holdingsRef.current;
-              const finalPrice = currentPriceRef.current;
-              const finalValue = Math.max(0, finalCash + (finalHoldings * finalPrice));
-              console.log("Game ended - Final calculation:", { 
-                cash: finalCash, 
-                holdings: finalHoldings, 
-                price: finalPrice, 
-                finalValue,
-                calculation: `${finalCash} + (${finalHoldings} * ${finalPrice}) = ${finalValue}`
-              });
-              onEnd(finalValue);
-            }, 100); // 100ms 지연으로 ref 동기화 보장
-          }
+          // timeLeft를 0으로 설정하면 useEffect에서 게임 종료 처리
           return 0;
         }
         return prev - 1;
@@ -1175,18 +1156,21 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
     };
   }, [isTutorialActive, triggerNews]);
 
-  // End Game Effect (백업: setInterval에서 처리되지 않은 경우를 대비)
+  // End Game Effect: timeLeft가 0이 되면 게임 종료
   useEffect(() => {
     if (timeLeft === 0 && !isGameEndedRef.current) {
-      isGameEndedRef.current = true; // Prevent multiple calls
-      // 상태를 직접 사용하여 최신 값으로 계산
+      isGameEndedRef.current = true;
+      // 상태를 직접 사용하여 최신 값으로 계산 (ref보다 확실함)
       const finalValue = Math.max(0, cash + (holdings * currentPrice));
-      console.log("Game ended (useEffect) - Final calculation:", { 
-        cash, 
-        holdings, 
-        price: currentPrice, 
-        finalValue 
-      });
+      if (process.env.NODE_ENV === "development") {
+        console.log("Game ended (useEffect) - Final calculation:", { 
+          cash, 
+          holdings, 
+          price: currentPrice, 
+          finalValue,
+          calculation: `${cash} + (${holdings} * ${currentPrice}) = ${finalValue}`
+        });
+      }
       onEnd(finalValue);
     }
   }, [timeLeft, cash, holdings, currentPrice, onEnd]);
@@ -1198,25 +1182,43 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
 
     // Buy Max
     const quantity = Math.floor(cash / currentPrice);
-    if (quantity === 0) return;
+    if (quantity <= 0 || !isFinite(quantity)) return;
 
-    setHoldings(prev => prev + quantity);
-    setCash(prev => Math.max(0, prev - (quantity * currentPrice))); // Ensure non-negative
+    const cost = quantity * currentPrice;
+    if (cost > cash || !isFinite(cost)) return; // Safety check
+
+    setHoldings(prev => {
+      const newHoldings = prev + quantity;
+      return isFinite(newHoldings) ? newHoldings : prev;
+    });
+    setCash(prev => Math.max(0, prev - cost)); // Ensure non-negative
   }, [cash, currentPrice]);
 
   const handleSell = useCallback(() => {
-    if (isGameEndedRef.current || holdings === 0 || currentPrice <= 0) return;
+    if (isGameEndedRef.current || holdings <= 0 || currentPrice <= 0) return;
     
     playSound('sell');
 
     // Sell All
     const revenue = holdings * currentPrice;
-    setCash(prev => prev + revenue);
+    if (!isFinite(revenue) || revenue < 0) return; // Safety check
+    
+    setCash(prev => {
+      const newCash = prev + revenue;
+      return isFinite(newCash) ? newCash : prev;
+    });
     setHoldings(0);
   }, [holdings, currentPrice]);
 
-  const totalValue = useMemo(() => cash + (holdings * currentPrice), [cash, holdings, currentPrice]);
-  const returnRate = useMemo(() => ((totalValue - INITIAL_CAPITAL) / INITIAL_CAPITAL) * 100, [totalValue]);
+  const totalValue = useMemo(() => {
+    const value = cash + (holdings * currentPrice);
+    return isFinite(value) && value >= 0 ? value : 0;
+  }, [cash, holdings, currentPrice]);
+  
+  const returnRate = useMemo(() => {
+    const rate = ((totalValue - INITIAL_CAPITAL) / INITIAL_CAPITAL) * 100;
+    return isFinite(rate) ? rate : 0;
+  }, [totalValue]);
 
 
   return (
@@ -1462,8 +1464,9 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
 };
 
 const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: () => void }) => {
-  const profit = finalValue - INITIAL_CAPITAL;
-  const returnRate = (profit / INITIAL_CAPITAL) * 100;
+  const safeFinalValue = isFinite(finalValue) && finalValue >= 0 ? finalValue : 0;
+  const profit = safeFinalValue - INITIAL_CAPITAL;
+  const returnRate = isFinite(profit) ? (profit / INITIAL_CAPITAL) * 100 : 0;
   const isProfit = profit >= 0;
   
   const [playerName, setPlayerName] = useState("");
@@ -1491,8 +1494,8 @@ const GameResult = ({ finalValue, onRestart }: { finalValue: number, onRestart: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: playerName.trim(),
-          returnRate: isNaN(returnRate) ? 0 : returnRate, // Safety check
-          finalValue: isNaN(finalValue) || finalValue < 0 ? 0 : finalValue, // Safety check
+          returnRate: !isFinite(returnRate) ? 0 : returnRate, // Safety check
+          finalValue: !isFinite(finalValue) || finalValue < 0 ? 0 : finalValue, // Safety check
         }),
       });
       
@@ -1702,7 +1705,12 @@ export default function InvestmentGame() {
   };
 
   const endGame = (finalVal: number) => {
-    setFinalResult(finalVal);
+    // 안전 검증: finalVal이 유효한 값인지 확인
+    const safeFinalVal = isFinite(finalVal) && finalVal >= 0 ? finalVal : INITIAL_CAPITAL;
+    if (process.env.NODE_ENV === "development") {
+      console.log("endGame called:", { finalVal, safeFinalVal, INITIAL_CAPITAL });
+    }
+    setFinalResult(safeFinalVal);
     setStatus("ended");
   };
 
