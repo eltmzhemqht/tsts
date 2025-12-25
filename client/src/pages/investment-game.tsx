@@ -1103,7 +1103,7 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
         // Normal game: countdown normally
         if (prev <= 1) {
           clearInterval(timerInterval);
-          isGameEndedRef.current = true; // Mark game as ended
+          // timeLeft를 0으로 설정하면 useEffect에서 게임 종료 처리
           return 0;
         }
         return prev - 1;
