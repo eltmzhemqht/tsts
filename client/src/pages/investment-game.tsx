@@ -1022,6 +1022,8 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
   const newsIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const priceUpdateTimeoutsRef = useRef<NodeJS.Timeout[]>([]); // Track all pending price updates
   const timeLeftRef = useRef(timeLeft);
+  const cashRef = useRef(cash);
+  const holdingsRef = useRef(holdings);
   const lastNewsTextRef = useRef<string | null>(null);
   const isGameEndedRef = useRef(false); // Prevent multiple game end calls
 
@@ -1103,7 +1105,15 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
         // Normal game: countdown normally
         if (prev <= 1) {
           clearInterval(timerInterval);
-          // timeLeft를 0으로 설정하면 useEffect에서 게임 종료 처리
+          // 게임 종료 처리: ref를 사용하여 최신 값으로 계산
+          if (!isGameEndedRef.current) {
+            isGameEndedRef.current = true;
+            const finalValue = Math.max(0, cashRef.current + (holdingsRef.current * currentPriceRef.current));
+            // 다음 틱에서 onEnd 호출 (상태 업데이트 후)
+            setTimeout(() => {
+              onEnd(finalValue);
+            }, 0);
+          }
           return 0;
         }
         return prev - 1;
@@ -1142,14 +1152,14 @@ const GamePlay = ({ assetType, onEnd, showTutorial = false, onTutorialEnd }: { a
     };
   }, [isTutorialActive, triggerNews]);
 
-  // End Game Effect
+  // End Game Effect (백업: setInterval에서 처리되지 않은 경우를 대비)
   useEffect(() => {
     if (timeLeft === 0 && !isGameEndedRef.current) {
       isGameEndedRef.current = true; // Prevent multiple calls
-      const finalValue = Math.max(0, cash + (holdings * currentPriceRef.current)); // Ensure non-negative
+      const finalValue = Math.max(0, cashRef.current + (holdingsRef.current * currentPriceRef.current)); // Ensure non-negative
       onEnd(finalValue);
     }
-  }, [timeLeft, cash, holdings, onEnd]);
+  }, [timeLeft, onEnd]);
 
   const handleBuy = useCallback(() => {
     if (isGameEndedRef.current || currentPrice <= 0 || cash < currentPrice) return; 
