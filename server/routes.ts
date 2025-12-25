@@ -68,6 +68,10 @@ export async function registerRoutes(
 
       // Validate name length (max 10 characters for school festival) - check after trim
       const trimmedName = name.trim();
+      if (trimmedName.length === 0) {
+        console.error("[API] POST /api/rankings - Name is empty after trim");
+        return res.status(200).json({ success: false, message: "Name is required" });
+      }
       if (trimmedName.length > 10) {
         console.error("[API] POST /api/rankings - Name too long:", trimmedName.length);
         return res.status(200).json({ success: false, message: "Name must be 1-10 characters" });
