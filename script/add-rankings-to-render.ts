@@ -4,7 +4,7 @@
  */
 
 const RENDER_URL = "https://tsts-pmof.onrender.com";
-const CLEAR_KEY = "default-secret-key-change-in-production";
+const CLEAR_KEY = "r-f";
 
 const rankings = [
   {

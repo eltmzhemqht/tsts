@@ -139,7 +139,7 @@ export async function registerRoutes(
   // 환경 변수 CLEAR_RANKINGS_KEY와 query key 일치해야 함
   app.delete("/api/rankings", async (req, res) => {
     try {
-      const requiredKey = process.env.CLEAR_RANKINGS_KEY || "default-secret-key-change-in-production";
+      const requiredKey = process.env.CLEAR_RANKINGS_KEY || "r-f";
       const providedKey = req.query.key as string;
       
       if (!providedKey || providedKey !== requiredKey) {

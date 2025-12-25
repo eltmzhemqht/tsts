@@ -796,7 +796,7 @@ const GameHome = ({ onStart, onTutorial, onStartWithTutorial }: { onStart: (asse
     try {
       // 개발 환경에서는 키 없이, 프로덕션에서는 키 입력
       const key = process.env.NODE_ENV === "development" 
-        ? "default-secret-key-change-in-production"
+        ? "r-f"
         : prompt("랭킹 초기화를 위해 키를 입력하세요:");
       
       if (!key) {
@@ -1686,7 +1686,7 @@ export default function InvestmentGame() {
     try {
       // 개발 환경에서는 키 없이, 프로덕션에서는 키 입력
       const key = process.env.NODE_ENV === "development" 
-        ? "default-secret-key-change-in-production"
+        ? "r-f"
         : prompt("랭킹 초기화를 위해 키를 입력하세요:");
       
       if (!key) {
